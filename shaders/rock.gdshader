@@ -83,6 +83,9 @@ void fragment() {
 		vec3 w = pow(abs(wnrm), vec3(4.0));
 		w /= (w.x + w.y + w.z);
 		vec3 t = texture(tex, p.zy * tex_scale).rgb * w.x + texture(tex, p.xz * tex_scale).rgb * w.y + texture(tex, p.xy * tex_scale).rgb * w.z;
+		// break up the repeat with slow light and dark patches, keep a little relief from the noise
+		float patch = mix(0.72, 1.18, fbm(p * 0.18));
+		t *= patch * mix(0.85, 1.1, h);
 		c = mix(c, t * tex_tint * mix(0.6, 1.0, foot), use_tex);
 	}
 	ALBEDO = c;

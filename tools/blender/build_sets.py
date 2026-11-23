@@ -377,7 +377,7 @@ def chamber():
     root = empty("set_chamber")
     bark = mat("bark", "#4a3a2a", 0.95)
     rootm = mat("root", "#4a3c2e", 0.9)
-    ground = mat("ground", "#3a3024", 1.0)
+    ground = mat("cavefloor", "#3a3024", 1.0)
     wall = mat("wallstone", "#3a3630", 0.95)
     thorn = mat("thorn", "#b8b49a", 0.8)
     rng = random.Random(31)
@@ -515,8 +515,63 @@ def nest():
     export("set_nest")
 
 
+# ---------------------------------------------------------------- the dead trunk (Part III)
+# Godot builds the trunk at (0, 0, -2): a hollow split open toward the player (+Z), and two
+# back pieces that slide apart when the way opens. These match that, as three models with
+# their origin at the trunk's centre. Angles are Godot's: 0 faces the player, 180 the back.
+def trunk_piece(name, a0, a1, seed):
+    reset()
+    root = empty(name)
+    bark = mat("bark", "#4a3a2a", 0.95)
+    inner = mat("heartwood", "#2a1e16", 1.0)
+    p = Part("Shell", seed)
+
+    def height(a):
+        return 5.0 + 1.6 * noise.noise(Vector((a * 0.05, seed, 0))) + 0.9 * abs(math.sin(math.radians(a) * 7 + seed))
+
+    def surf(rad_fn, m, flip):
+        nu = max(4, int(abs(a1 - a0) / 3))
+        def fn(u, v):
+            a = a0 + (a1 - a0) * (u if not flip else 1 - u)
+            z = height(a) * v
+            ar = math.radians(a)
+            flare = 0.55 * (1 - smooth(0.0, 1.4, z)) ** 2
+            r = rad_fn(a, z) + flare
+            return Vector((math.sin(ar) * r, -math.cos(ar) * r, z))
+        rows = grid(p, m, nu, 30, fn)
+        return rows
+
+    def outer(a, z):
+        return 1.72 + 0.12 * abs(math.sin(math.radians(a) * 26 + noise.noise(Vector((a * 0.1, z * 0.3, seed))) * 2)) + 0.08 * fbm(Vector((a * 0.05, z * 0.4, seed)))
+
+    def inner_r(a, z):
+        return 1.3 + 0.06 * fbm(Vector((a * 0.07, z * 0.5, seed + 3)))
+    ro = surf(outer, bark, False)
+    ri = surf(inner_r, inner, True)
+    # the broken top: join outer and inner at each column's top
+    top_o, top_i = ro[-1], list(reversed(ri[-1]))
+    for i in range(len(top_o) - 1):
+        p.bm.faces.new((top_o[i], top_o[i + 1], top_i[i + 1], top_i[i]))
+    # the split edges
+    for col in (0, -1):
+        for j in range(len(ro) - 1):
+            a, b = ro[j][col], ro[j + 1][col]
+            c, d = ri[j + 1][-1 - col if col == 0 else 0], ri[j][-1 - col if col == 0 else 0]
+            p.bm.faces.new((a, b, c, d))
+    p._tag(list(top_o), bark, True)
+    p.done(root)
+    export(name)
+
+
+def trunk():
+    trunk_piece("trunk_front_l", 30.0, 140.0, 51)
+    trunk_piece("trunk_front_r", -140.0, -30.0, 52)
+    trunk_piece("trunk_back_l", 140.0, 180.0, 53)
+    trunk_piece("trunk_back_r", 180.0, 220.0, 54)
+
+
 if __name__ == "__main__":
-    which = sys.argv[sys.argv.index("--sets") + 1].split(",") if "--sets" in sys.argv else ["pathway", "corridors", "chamber", "nest"]
+    which = sys.argv[sys.argv.index("--sets") + 1].split(",") if "--sets" in sys.argv else ["pathway", "corridors", "chamber", "nest", "trunk"]
     for name in which:
         globals()[name]()
     print("sets built")

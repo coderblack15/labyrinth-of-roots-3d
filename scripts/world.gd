@@ -731,6 +731,7 @@ func _build_chamber() -> void:
 		var a := TAU * i / 6 + 0.5
 		M.limb(trunk, Vector3(sin(a) * 1.5, 0.6, cos(a) * 1.5), Vector3(sin(a) * 3.2, 0.05, cos(a) * 3.2), 0.18, rm)
 	props.trunk_back = back
+	props.trunk = trunk
 	var red := OmniLight3D.new()
 	red.light_color = Color("ff2a1a")
 	red.light_energy = 0.0

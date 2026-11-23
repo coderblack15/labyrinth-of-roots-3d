@@ -719,13 +719,121 @@ def egg_sac():
     export("egg_sac")
 
 
+# ---------------------------------------------------------------- Ryytaa, after Adrian's painting
+# A spider queen: a dusty grey-brown body, a great rough abdomen, legs like jointed bark
+# with knees high above her back, six pale glowing eyes and four long hooked fangs.
+def ryytaa_queen():
+    reset()
+    root = empty("ryytaa")
+    base(0.6).parent = root
+    hide = mat("rq_hide", "#5a5248", 0.85)
+    hide_d = mat("rq_hide_dark", "#3a342e", 0.9)
+    bark = mat("rq_leg", "#56493c", 0.9)
+    bark_d = mat("rq_leg_dark", "#2e2620", 0.9)
+    eye = mat("rq_eye", "#efe6c4", 0.2, 0.0, "#f2e2a8", 2.6)
+    fang = mat("rq_fang", "#8a8070", 0.45)
+    body = empty("Body", root)
+    p = Part("Torso", 61)
+    # cephalothorax and the great abdomen, both rough like old hide
+    p.sphere(hide, 0.3, loc=(0, 0.12, 0.6), scale=(1.0, 1.15, 0.78), seg=20, rings=12, rough=0.07, freq=7)
+    p.sphere(hide, 0.52, loc=(0, -0.62, 0.86), scale=(1.0, 1.25, 0.95), rot=(-18, 0, 0), seg=24, rings=16, rough=0.09, freq=4)
+    p.sphere(hide_d, 0.2, loc=(0, -0.18, 0.66), scale=(1.0, 1.0, 0.8), seg=12, rings=8, rough=0.06, freq=6)
+    # ridged plates over the abdomen
+    for i in range(6):
+        y = -0.3 - i * 0.14
+        p.torus(hide_d, 0.42 - abs(i - 2.5) * 0.05, 0.022, loc=(0, y, 0.88 + 0.06 * math.sin(i)), rot=(90 - 18, 0, 0), scale=(1, 1, 0.8), seg=28, rseg=5, arc=180)
+    # six eyes: two large in the middle, four around them
+    for (ex, ez, er) in [(-0.055, 0.74, 0.042), (0.055, 0.74, 0.042), (-0.13, 0.71, 0.03), (0.13, 0.71, 0.03), (-0.09, 0.665, 0.026), (0.09, 0.665, 0.026)]:
+        p.sphere(eye, er, loc=(ex, 0.43 - abs(ex) * 0.35, ez), seg=10, rings=8)
+    # four long hooked fangs: two chelicerae in the middle, two palps outside
+    for s in (-1, 1):
+        p.sphere(hide, 0.075, loc=(s * 0.065, 0.42, 0.52), scale=(1, 1.1, 1.5), seg=10, rings=8, rough=0.05)
+        p.tube(fang, [(s * 0.065, 0.46, 0.45, 0.04), (s * 0.07, 0.53, 0.3, 0.032), (s * 0.06, 0.55, 0.16, 0.022),
+                      (s * 0.04, 0.5, 0.06, 0.012), (s * 0.02, 0.43, 0.03, 0.002)], seg=8)
+        p.tube(fang, [(s * 0.15, 0.38, 0.55, 0.03), (s * 0.22, 0.5, 0.42, 0.026), (s * 0.22, 0.56, 0.26, 0.018),
+                      (s * 0.17, 0.53, 0.14, 0.009), (s * 0.13, 0.47, 0.1, 0.002)], seg=7)
+    p.done(body)
+    legs = empty("Legs", body)
+    for side in (-1, 1):
+        for i in range(4):
+            y = 0.26 - i * 0.16
+            fwd = (1.5 - i) * 0.55  # front legs reach forward, back legs back
+            hip = Vector((side * 0.22, y, 0.62))
+            knee = Vector((side * 0.62, y + fwd * 0.45, 1.75 - i * 0.12))
+            mid = Vector((side * 0.98, y + fwd * 0.9, 1.25 - i * 0.1))
+            ankle = Vector((side * 1.18, y + fwd * 1.2, 0.45))
+            tip = Vector((side * 1.24, y + fwd * 1.3, 0.0))
+            pts = [hip, hip.lerp(knee, 0.5) + Vector((0, 0, 0.05)), knee, mid, ankle, tip]
+            radii = [0.085, 0.08, 0.07, 0.058, 0.04, 0.006]
+            lg = Part("Leg%d%s" % (i, "R" if side == 1 else "L"), 70 + i * 2 + side)
+            lg.tube(bark, [(*pts[k], radii[k]) for k in range(6)], seg=9, rough=0.22, freq=9)
+            # bark-like joints: thick knotted rings
+            for k in (2, 3, 4):
+                lg.sphere(bark_d, radii[k] * 1.45, loc=tuple(pts[k]), scale=(1, 1, 1.2), seg=9, rings=7, rough=0.2, freq=8)
+            # splinters along the shins
+            for k in (2, 3):
+                a, b = pts[k], pts[k + 1]
+                for t in (0.25, 0.5, 0.75):
+                    c = a.lerp(b, t)
+                    lg.cone(bark_d, 0.018, 0.0, 0.09, loc=tuple(c + Vector((side * radii[k] * 0.8, 0, 0))), rot=(0, side * 70, 0), seg=4)
+            lg.done(legs)
+    export("ryytaa")
+
+
+def egg_sac_wrapped():
+    """Dark mottled sacs held in a tight net of silk, with drips, as in Adrian's painting."""
+    reset()
+    root = empty("egg_sac")
+    sac = mat("egg_sac", "#4e4a44", 0.75)
+    silk = mat("egg_silk", "#d4ccb8", 0.3)
+    p = Part("Sac", 102)
+    R, CZ, SZ = 0.5, 0.48, 0.96
+    p.sphere(sac, R, loc=(0, 0, CZ), scale=(1, 1, SZ), seg=28, rings=18, rough=0.035, freq=3)
+    rng = p.rng
+
+    def on(d, lift=0.012):
+        d = d.normalized()
+        return Vector((d.x * (R + lift), d.y * (R + lift), CZ + d.z * (R + lift) * SZ))
+    # the net: great circles and shorter arcs, close to the shell
+    for i in range(22):
+        ax = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))).normalized()
+        u = ax.cross(Vector((0, 0, 1)) if abs(ax.z) < 0.9 else Vector((1, 0, 0))).normalized()
+        w = ax.cross(u)
+        span = math.tau if i < 9 else rng.uniform(1.2, 3.0)
+        a0 = rng.uniform(0, math.tau)
+        n = 30 if i < 9 else 14
+        pts = []
+        for k in range(n + 1):
+            a = a0 + span * k / n
+            pts.append((*on(u * math.cos(a) + w * math.sin(a)), rng.uniform(0.004, 0.009)))
+        p.tube(silk, pts, seg=4, cap=False)
+    # drips: strands that sag from the lower half and end in a bead
+    for i in range(9):
+        a = rng.uniform(0, math.tau)
+        el = rng.uniform(-0.45, 0.05)
+        d = Vector((math.cos(a) * math.cos(el), math.sin(a) * math.cos(el), math.sin(el)))
+        top = on(d, 0.0)
+        drop = rng.uniform(0.12, 0.35)
+        out = Vector((math.cos(a), math.sin(a), 0)) * 0.05
+        pts = [(*top, 0.006), (*(top + out + Vector((0, 0, -drop * 0.5))), 0.005), (*(top + out * 1.2 + Vector((0, 0, -drop))), 0.004)]
+        p.tube(silk, pts, seg=4, cap=False)
+        end = top + out * 1.2 + Vector((0, 0, -drop))
+        p.sphere(silk, 0.014, loc=tuple(end), scale=(1, 1, 1.5), seg=6, rings=5)
+    # anchor strands to the ground
+    for i in range(7):
+        a = rng.uniform(0, math.tau)
+        top = on(Vector((math.cos(a), math.sin(a), rng.uniform(-0.1, 0.4))), 0.0)
+        p.tube(silk, [(*top, 0.005), (math.cos(a) * 0.75, math.sin(a) * 0.75, 0.0, 0.003)], seg=4, cap=False)
+    p.done(root)
+    export("egg_sac")
+
 if os.environ.get("MODELS_AS_LIBRARY") != "1":
     hero()
     stranger("stranger_a", "#3a332c", "a")
     stranger("stranger_b", "#2e3234", "b")
     vine_horror()
     spider("spider", False)
-    spider("ryytaa", True)
+    ryytaa_queen()
     skeleton("skeleton_sit", True, True)
     skeleton("skeleton_hang_armor", False, True, rust=True, sword=True)
     skeleton("skeleton_hang_bare", False, False)
@@ -733,5 +841,5 @@ if os.environ.get("MODELS_AS_LIBRARY") != "1":
     shield()
     torch()
     knife()
-    egg_sac()
+    egg_sac_wrapped()
     print("all models built")

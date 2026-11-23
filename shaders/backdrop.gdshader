@@ -6,9 +6,10 @@ uniform float crop = 0.45;
 uniform float top = 0.0;
 uniform float bottom = 0.8;
 uniform float bright = 1.0;
+uniform bool mirror = true;
 void fragment() {
 	float x = UV.x * 2.0;
-	float u = (x < 1.0 ? x : 2.0 - x) * crop;
+	float u = mirror ? (x < 1.0 ? x : 2.0 - x) * crop : UV.x;
 	vec3 c = texture(tex, vec2(u, mix(top, bottom, UV.y))).rgb;
 	ALBEDO = c * bright;
 }

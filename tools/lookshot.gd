@@ -54,8 +54,9 @@ func _init() -> void:
 		sp.position = world.sq(spots[i][0], spots[i][1])
 		sp.look_at(world.sq(3, 4), Vector3.UP, false)
 	world.cam_fixed = true
-	world.cam_fixed_pos = world.sq(3, 4) + Vector3(0.6, 5.4, 6.2)
-	world.cam_fixed_look = world.sq(3, 2)
+	world.place_player(world.sq(2, 4), 0)
+	world.cam_fixed_pos = world.sq(3, 4) + Vector3(4.2, 3.6, 4.4)
+	world.cam_fixed_look = world.sq(3, 1) + Vector3(0, 1.0, 0)
 	world.cam.global_position = world.cam_fixed_pos
 	world.cam_look = world.cam_fixed_look
 	await _settle(world)
