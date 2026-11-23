@@ -5,7 +5,7 @@ extends RefCounted
 const M = preload("res://scripts/models.gd")
 const ROCK = preload("res://shaders/rock.gdshader")
 # Sculpted sets switched on so far (the others are built but still being placed).
-const SETS_READY := ["pathway"]
+const SETS_READY := ["pathway", "corridors", "chamber", "nest"]
 
 static func rock(base: Color, disp := 0.25, moss := 0.5, strata := 0.5, scale := 0.55) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
@@ -74,6 +74,10 @@ static func dress(world, name: String) -> void:
 	match name:
 		"pathway":
 			_pathway(world)
+		"corridors":
+			_corridors(world)
+		"chamber":
+			_chamber(world)
 		"nest":
 			_nest(world)
 
@@ -82,7 +86,7 @@ const SURF := {
 	"wallstone": [Color("4a4640"), 0.2, 0.3, 0.3],
 	"cavefloor": [Color("3a342c"), 0.1, 0.0, 0.0],
 	"caverock": [Color("4a443e"), 0.1, 0.4, 0.2],
-	"bark": [Color("5a4634"), 0.1, 0.0, 0.9],
+	"bark": [Color("4e3c2c"), 0.1, 0.0, 0.45],
 	"thorn": [Color("bcb89e"), 0.0, 0.0, 0.0],
 	"bone": [Color("cfc7b0"), 0.0, 0.0, 0.0],
 	"cliff": [Color("66625c"), 0.35, 0.2, 0.3],
@@ -90,7 +94,7 @@ const SURF := {
 	"ground": [Color("4a4436"), 0.9, 0.0, 0.0],
 	"flag": [Color("5c574f"), 0.35, 0.0, 0.0],
 	"rock": [Color("625e58"), 0.45, 0.0, 0.0],
-	"root": [Color("54463a"), 0.15, 0.0, 0.85],
+	"root": [Color("4a3c30"), 0.15, 0.0, 0.4],
 }
 
 # A Blender-sculpted set replaces the stage's blocks; the blocks stay for walking into.
@@ -225,12 +229,73 @@ static func _root(parent: Node3D, p: Vector3, r: float, rng: RandomNumberGenerat
 		if depth < 2 and rng.randf() < 0.18:
 			_root(parent, p, r * 0.6, rng, m, depth + 1)
 
+static func shaft(parent: Node3D, top: Vector3, bottom: Vector3, r: float, c: Color, strength := 0.35) -> MeshInstance3D:
+	var cm := CylinderMesh.new()
+	var h := top.distance_to(bottom)
+	cm.top_radius = r * 0.6
+	cm.bottom_radius = r
+	cm.height = h
+	cm.cap_top = false
+	cm.cap_bottom = false
+	cm.radial_segments = 20
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://shaders/shaft.gdshader")
+	m.set_shader_parameter("col", c)
+	m.set_shader_parameter("strength", strength)
+	var mi := M.part(parent, cm, m, (top + bottom) * 0.5)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var up := (top - bottom).normalized()
+	if abs(up.dot(Vector3.UP)) < 0.999:
+		mi.basis = Basis(Quaternion(Vector3.UP, up))
+	# and the light it brings
+	var sl := SpotLight3D.new()
+	sl.light_color = c
+	sl.light_energy = 1.6
+	sl.spot_range = h + 2.0
+	sl.spot_angle = rad_to_deg(atan(r / h)) * 1.4
+	sl.shadow_enabled = false
+	parent.add_child(sl)
+	sl.global_position = top
+	sl.look_at(bottom, Vector3.FORWARD if abs(up.dot(Vector3.UP)) > 0.99 else Vector3.UP)
+	return mi
+
+static func _ember_lights(world, xs: Array, zs: Array, c: Color) -> void:
+	for i in xs.size():
+		var l := OmniLight3D.new()
+		l.light_color = c
+		l.light_energy = 1.2
+		l.omni_range = 3.5
+		l.position = Vector3(xs[i], 1.6, zs[i])
+		world.stage.add_child(l)
+
+static func _corridors(world) -> void:
+	_ember_lights(world, [-1.7, 1.7, -1.7, 1.7, 1.7], [2.0, -2.5, -7.0, -10.0, -19.0], Color("ff7a28"))
+	shaft(world.stage, Vector3(0.6, 9.0, -8.5), Vector3(-0.2, 0.0, -9.5), 1.0, Color("a8c8ff"), 0.14)
+	shaft(world.stage, Vector3(-0.4, 9.0, -19.5), Vector3(0.3, 0.0, -20.5), 0.9, Color("a8c8ff"), 0.12)
+	_dust(world.stage, Vector3(0, 2, -8), Vector3(1.6, 2.0, 12), Color(1.0, 0.8, 0.6, 0.4))
+
+static func _chamber(world) -> void:
+	shaft(world.stage, Vector3(1.8, 12.0, 0.6), Vector3(0.6, 0.0, 1.0), 1.3, Color("ffd8a0"), 0.14)
+	_dust(world.stage, Vector3(0, 3, -1), Vector3(4, 3.0, 4), Color(1.0, 0.85, 0.6, 0.5))
+
 static func _nest(world) -> void:
 	var back := DirectionalLight3D.new()
 	back.light_color = Color("6070a0")
 	back.light_energy = 0.2
 	back.rotation_degrees = Vector3(-50, 160, 0)
 	world.stage.add_child(back)
+	shaft(world.stage, Vector3(0.6, 13.0, -0.8), Vector3(0.0, 0.0, 0.0), 2.6, Color("b8c8ff"), 0.2)
+	for e in world.props.get("eggs", []):
+		for n in e.find_children("*", "MeshInstance3D", true, false):
+			var mi := n as MeshInstance3D
+			for i in mi.mesh.get_surface_count():
+				var src := mi.get_active_material(i)
+				if src is StandardMaterial3D and src.resource_name == "egg_sac":
+					var m: StandardMaterial3D = src.duplicate()
+					m.emission_enabled = true
+					m.emission = Color("9ab040")
+					m.emission_energy_multiplier = 0.35
+					mi.set_surface_override_material(i, m)
 	_dust(world.stage, Vector3(0, 2, 0), Vector3(7, 2.5, 7), Color(1.0, 0.75, 0.45, 0.45))
 
 static func _dust(parent: Node3D, at: Vector3, ext: Vector3, c: Color) -> void:

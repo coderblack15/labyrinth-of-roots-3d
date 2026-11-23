@@ -29,6 +29,17 @@ func _init() -> void:
 	if "--pathway" in ua:
 		quit()
 		return
+	world.build("corridors")
+	world.set_light("torch", 0.01)
+	world.hero_take_torch()
+	world.place_player(Vector3(0, 0.1, -3.0), 0)
+	await _settle(world)
+	_save(out + "-corridors.png")
+	world.build("chamber")
+	world.set_light("torch", 0.01)
+	world.place_player(Vector3(0, 0.1, 6.0), 0)
+	await _settle(world)
+	_save(out + "-chamber.png")
 	world.build("nest")
 	world.set_light("torch", 0.01)
 	world._hold("hand_r", load("res://scripts/models.gd").axe(), Vector3(0, -0.1, 0), Vector3(-50, 0, 0))
