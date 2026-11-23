@@ -3,6 +3,7 @@
 extends Node3D
 
 const M = preload("res://scripts/models.gd")
+const LOOK = preload("res://scripts/look.gd")
 
 signal arrived
 
@@ -45,6 +46,7 @@ var torch_e := 3.2
 var walk_t := 0.0
 var music: AudioStreamPlayer
 var music_key := ""
+var look := false  # painterly look pass (scripts/look.gd)
 
 func _ready() -> void:
 	env = Environment.new()
@@ -56,6 +58,13 @@ func _ready() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
+	if look:
+		env.glow_enabled = true
+		env.glow_intensity = 0.9
+		env.glow_bloom = 0.15
+		LOOK.add_filter(self)
+		cam_offset = Vector3(0, 4.4, 6.4)
+		cam_look_off = Vector3(0, 1.4, -6.0)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -379,6 +388,22 @@ func set_light(mode: String, t := 1.2) -> void:
 			amb = Color("2a1416")
 			amb_e = 0.5
 			fog_d = 0.02
+	if look:
+		sun.rotation_degrees = Vector3(-16, 55, 0)
+		if mode == "dusk":
+			# the painting's weather: grey cloud and mist, a low warm sun
+			sky_top = Color("2e3038")
+			sky_hor = Color("8a8a90")
+			gnd = Color("2a2826")
+			amb = Color("8a8c98")
+			amb_e = 0.5
+			sun_e = 1.6
+			fog_c = Color("70727c")
+			fog_d = 0.006
+			sun.light_color = Color("ffc890")
+		elif mode in ["torch", "gems"]:
+			amb = Color("4a4050")
+			amb_e = 0.55
 	tw.tween_property(sky_mat, "sky_top_color", sky_top, t)
 	tw.tween_property(sky_mat, "sky_horizon_color", sky_hor, t)
 	tw.tween_property(sky_mat, "ground_horizon_color", sky_hor.darkened(0.3), t)
@@ -429,6 +454,8 @@ func build(name: String) -> void:
 	stage_name = name
 	cam_fixed = false
 	call("_build_" + name)
+	if look:
+		LOOK.dress(self, name)
 
 func change_stage(name: String) -> void:
 	await main.ui.fade_out(0.7)
