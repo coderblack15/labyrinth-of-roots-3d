@@ -443,3 +443,26 @@ static func grid_texture(cells: int) -> ImageTexture:
 			img.set_pixel(k, p, Color(1, 0.85, 0.55, 0.55))
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
+
+# Burr, the dog (Blender model burr.glb; a small box-and-ball dog as fallback).
+static func burr() -> Node3D:
+	var g := glb("burr")
+	if g:
+		return g
+	var r := Node3D.new()
+	base_disc(r, 0.44)
+	var c := mat(Color("6a5a48"), 0.95)
+	part(r, sph(0.2), c, Vector3(0, 0.5, 0), Vector3.ZERO, Vector3(0.9, 0.9, 1.6))
+	part(r, sph(0.12), c, Vector3(0, 0.82, -0.4))
+	for x in [-0.1, 0.1]:
+		for z in [-0.18, 0.28]:
+			limb(r, Vector3(x, 0.45, z), Vector3(x, 0.08, z), 0.045, c)
+	return r
+
+static func torus_mesh(r: float, t: float) -> TorusMesh:
+	var m := TorusMesh.new()
+	m.inner_radius = r - t
+	m.outer_radius = r + t
+	m.rings = 20
+	m.ring_segments = 8
+	return m

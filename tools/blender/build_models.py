@@ -827,7 +827,73 @@ def egg_sac_wrapped():
     p.done(root)
     export("egg_sac")
 
+
+# ---------------------------------------------------------------- Burr, the dog
+# A rough, wiry hound with burrs caught in his coat. Front faces +Y.
+def burr():
+    reset()
+    root = empty("burr")
+    base(0.44).parent = root
+    coat = mat("burr_coat", "#6a5a48", 0.95)
+    dark = mat("burr_dark", "#3a3028", 0.95)
+    pale = mat("burr_pale", "#a89478", 0.95)
+    nose = mat("burr_nose", "#141010", 0.3)
+    eye = mat("burr_eye", "#1a120c", 0.15, 0.0, "#3a2210", 0.6)
+    bur = mat("burr_burr", "#7a6a3a", 0.9)
+    collar = mat("burr_collar", "#5a2e1e", 0.6)
+    body = empty("Body", root)
+    p = Part("Torso", 61)
+    # barrel chest and back, a little shaggy
+    p.sphere(coat, 0.2, loc=(0, 0.12, 0.52), scale=(0.95, 1.25, 1.05), seg=14, rings=9, rough=0.05, freq=9)
+    p.sphere(coat, 0.18, loc=(0, -0.2, 0.5), scale=(0.9, 1.35, 0.95), seg=14, rings=9, rough=0.05, freq=9)
+    p.sphere(pale, 0.13, loc=(0, 0.22, 0.42), scale=(0.9, 0.8, 1.1), seg=10, rings=7, rough=0.06, freq=10)
+    # neck and head
+    p.tube(coat, [(0, 0.26, 0.6, 0.1), (0, 0.34, 0.72, 0.09), (0, 0.38, 0.8, 0.085)], seg=10)
+    p.sphere(coat, 0.12, loc=(0, 0.4, 0.84), scale=(0.95, 1.1, 0.95), seg=12, rings=8, rough=0.06, freq=10)
+    p.tube(dark, [(0, 0.46, 0.83, 0.07), (0, 0.56, 0.8, 0.055), (0, 0.62, 0.78, 0.045)], seg=10)
+    p.sphere(nose, 0.03, loc=(0, 0.645, 0.785), seg=8, rings=6)
+    # a wiry beard and brows
+    for i in range(7):
+        a = -0.6 + i * 0.2
+        p.cone(pale, 0.02, 0.0, 0.09, loc=(math.sin(a) * 0.04, 0.58, 0.74), rot=(200, 0, math.degrees(a) * 0.6), seg=4)
+    for s in (-1, 1):
+        p.sphere(eye, 0.018, loc=(s * 0.055, 0.5, 0.88), seg=8, rings=6)
+        p.box(dark, (0.05, 0.03, 0.02), loc=(s * 0.055, 0.5, 0.915), rot=(0, s * 15, 0))
+        # floppy ears
+        p.sphere(dark, 0.06, loc=(s * 0.1, 0.38, 0.86), scale=(0.45, 0.9, 1.3), rot=(0, s * 25, 0), seg=8, rings=6)
+    # collar with a ring
+    p.torus(collar, 0.095, 0.018, loc=(0, 0.3, 0.66), rot=(60, 0, 0), seg=18, rseg=6)
+    # tail, up and a little crooked
+    p.tube(coat, [(0, -0.42, 0.56, 0.04), (0, -0.52, 0.66, 0.035), (0.02, -0.56, 0.78, 0.025), (0.04, -0.54, 0.86, 0.012)], seg=8)
+    # burrs caught in the coat
+    for _ in range(14):
+        a = p.rng.random() * math.tau
+        y = p.rng.uniform(-0.35, 0.25)
+        loc = (math.cos(a) * 0.18, y, 0.5 + math.sin(a) * 0.18)
+        if loc[2] < 0.4:
+            continue
+        p.ico(bur, 0.016, loc=loc)
+    # shaggy tufts along the back
+    for i in range(10):
+        y = 0.2 - i * 0.065
+        p.cone(coat, 0.03, 0.0, 0.07, loc=(p.rng.uniform(-0.05, 0.05), y, 0.7 - abs(y + 0.05) * 0.2), rot=(p.rng.uniform(-30, -10), p.rng.uniform(-20, 20), 0), seg=4)
+    p.done(body)
+    legs = empty("Legs", body)
+    for side in (-1, 1):
+        for fy, nm in ((0.16, "F"), (-0.3, "B")):
+            lg = Part("Leg%s%s" % (nm, "R" if side == 1 else "L"), 70 + side + (2 if nm == "B" else 0))
+            x = side * 0.11
+            if nm == "F":
+                pts = [(x, fy, 0.45, 0.06), (x, fy + 0.02, 0.28, 0.045), (x, fy, 0.12, 0.038), (x, fy + 0.03, 0.1, 0.04)]
+            else:
+                pts = [(x, fy, 0.46, 0.08), (x, fy - 0.06, 0.3, 0.05), (x, fy - 0.02, 0.14, 0.038), (x, fy + 0.02, 0.1, 0.04)]
+            lg.tube(coat, pts, seg=8)
+            lg.sphere(dark, 0.045, loc=(x, fy + 0.05, 0.1), scale=(1, 1.4, 0.7), seg=8, rings=6)
+            lg.done(legs)
+    export("burr")
+
 if os.environ.get("MODELS_AS_LIBRARY") != "1":
+    burr()
     hero()
     stranger("stranger_a", "#3a332c", "a")
     stranger("stranger_b", "#2e3234", "b")

@@ -357,6 +357,32 @@ static func _eggs(world) -> void:
 	var eggs: Array = world.props.get("eggs", [])
 	if eggs.is_empty():
 		return
+	var mats := egg_mats()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	# clutches round the back of the nest, behind Ryytaa and along the walls
+	var centres := [Vector3(-2.6, 0, -6.6), Vector3(2.8, 0, -6.4), Vector3(-6.4, 0, -3.0), Vector3(6.6, 0, -2.6), Vector3(-7.0, 0, 2.6), Vector3(7.2, 0, 3.0)]
+	for i in eggs.size():
+		var e: Node3D = eggs[i]
+		var c: Vector3 = centres[i % centres.size()]
+		var k := i / centres.size()
+		var ang := rng.randf() * TAU
+		e.position = c + Vector3(cos(ang), 0, sin(ang)) * (0.0 if k == 0 else 0.85 + 0.25 * k)
+		var sc := rng.randf_range(0.8, 1.25) * (1.2 if k == 0 else 1.0)
+		e.scale = Vector3(sc, sc * rng.randf_range(0.92, 1.08), sc)
+		e.rotation.y = rng.randf() * TAU
+		paint_egg(e, mats)
+	# a soft light low among each clutch, so the silk catches
+	for c in centres:
+		var l := OmniLight3D.new()
+		l.light_color = Color("c8b898")
+		l.light_energy = 0.5
+		l.omni_range = 2.6
+		l.position = c + Vector3(0, 1.4, 1.0)
+		world.stage.add_child(l)
+
+# The shell and silk the egg sacs wear (shared with the battle board's clutches).
+static func egg_mats() -> Array:
 	var shell := rock(Color("5e574c"), 0.0, 0.0, 0.0, 1.6)
 	shell.set_shader_parameter("grime", 0.6)
 	shell.set_shader_parameter("bump", 0.8)
@@ -371,36 +397,18 @@ static func _eggs(world) -> void:
 	silk.emission_enabled = true
 	silk.emission = Color("6a6050")
 	silk.emission_energy_multiplier = 0.25
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 77
-	# clutches round the back of the nest, behind Ryytaa and along the walls
-	var centres := [Vector3(-2.6, 0, -6.6), Vector3(2.8, 0, -6.4), Vector3(-6.4, 0, -3.0), Vector3(6.6, 0, -2.6), Vector3(-7.0, 0, 2.6), Vector3(7.2, 0, 3.0)]
-	for i in eggs.size():
-		var e: Node3D = eggs[i]
-		var c: Vector3 = centres[i % centres.size()]
-		var k := i / centres.size()
-		var ang := rng.randf() * TAU
-		e.position = c + Vector3(cos(ang), 0, sin(ang)) * (0.0 if k == 0 else 0.85 + 0.25 * k)
-		var sc := rng.randf_range(0.8, 1.25) * (1.2 if k == 0 else 1.0)
-		e.scale = Vector3(sc, sc * rng.randf_range(0.92, 1.08), sc)
-		e.rotation.y = rng.randf() * TAU
-		for n in e.find_children("*", "MeshInstance3D", true, false):
-			var mi := n as MeshInstance3D
-			for si in mi.mesh.get_surface_count():
-				var src := mi.mesh.surface_get_material(si)
-				var nm := src.resource_name if src else ""
-				if nm == "egg_sac":
-					mi.set_surface_override_material(si, shell)
-				elif nm == "egg_silk":
-					mi.set_surface_override_material(si, silk)
-	# a soft light low among each clutch, so the silk catches
-	for c in centres:
-		var l := OmniLight3D.new()
-		l.light_color = Color("c8b898")
-		l.light_energy = 0.5
-		l.omni_range = 2.6
-		l.position = c + Vector3(0, 1.4, 1.0)
-		world.stage.add_child(l)
+	return [shell, silk]
+
+static func paint_egg(e: Node3D, mats: Array) -> void:
+	for n in e.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for si in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(si)
+			var nm := src.resource_name if src else ""
+			if nm == "egg_sac":
+				mi.set_surface_override_material(si, mats[0])
+			elif nm == "egg_silk":
+				mi.set_surface_override_material(si, mats[1])
 
 static func _dust(parent: Node3D, at: Vector3, ext: Vector3, c: Color) -> void:
 	var d := CPUParticles3D.new()

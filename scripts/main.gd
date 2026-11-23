@@ -7,6 +7,7 @@
 #   --shots=DIR       saves screenshots at the story's key moments
 #   --fast            no typewriter, short waits (for headless runs)
 #   --look            the painted diorama look (test)
+#   --battle=KEY      straight into a tactics battle (nest, gallery); with --autoplay both sides play themselves
 extends Node3D
 
 signal advance(how)
@@ -37,7 +38,7 @@ func _ready() -> void:
 	world = preload("res://scripts/world.gd").new()
 	world.name = "World"
 	world.main = self
-	world.look = "--look" in OS.get_cmdline_user_args()
+	world.look = "--look" in OS.get_cmdline_user_args() or Array(OS.get_cmdline_user_args()).any(func(a): return a.begins_with("--battle="))
 	add_child(world)
 	ui = preload("res://scripts/ui.gd").new()
 	ui.name = "UI"
@@ -51,7 +52,48 @@ func _ready() -> void:
 		Engine.time_scale = 4.0
 	get_tree().root.size_changed.connect(_fit)
 	_fit()
-	story.run()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--battle="):
+			battle_key = a.substr(9)
+	if battle_key != "":
+		await _battle()
+	else:
+		story.run()
+
+var battle_key := ""
+var battle
+
+# The tactics battle (scripts/tactics/): the painted look, the board, its screen.
+func _battle() -> void:
+	battle = preload("res://scripts/tactics/battle.gd").new()
+	battle.name = "Battle"
+	battle.main = self
+	battle.world = world
+	battle.rng = rng
+	battle.auto = autoplay
+	battle.demo = "--demo" in OS.get_cmdline_user_args()
+	battle.fast = fast
+	battle.setup(battle_key)
+	add_child(battle)
+	var bui = preload("res://scripts/tactics/battle_ui.gd").new()
+	bui.main = self
+	add_child(bui)
+	battle.ui = bui
+	battle.build()
+	await get_tree().process_frame
+	ui.fade_in(0.8)
+	var r: String = await battle.run()
+	bui.result(r, battle)
+	await shot("end")
+	if autoplay:
+		await get_tree().create_timer(1.0).timeout
+		get_tree().quit()
+		return
+	while true:
+		var ev: Dictionary = await battle.picked
+		if ev.type == "again":
+			get_tree().reload_current_scene()
+			return
 
 # Keeps text readable on phones and desktops alike: the UI scale follows the screen,
 # and the 3D camera is told how much of the screen the story panel covers.
