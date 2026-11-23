@@ -14,7 +14,7 @@ const LOOK = preload("res://scripts/look.gd")
 const MAPS = preload("res://scripts/tactics/maps.gd")
 const TOKEN = preload("res://shaders/token.gdshader")
 const TS := 1.2       # one square
-const HIGH := 0.6     # how far high ground stands up
+const LV := 0.45      # one level of height (the boards rise in steps)
 const SINK := 0.12    # how far sinking ground sits down
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
@@ -25,7 +25,8 @@ var rng := RandomNumberGenerator.new()
 var board := {}
 var W := 0
 var H := 0
-var G := []            # [y][x] ground char
+var G := []            # [y][x] ground char (as drawn: P pillar, p broken pillar, = steps)
+var L := []            # [y][x] level, 0 to 3
 var tile_nodes := {}
 var overlays := {}
 var ov_mats := {}
@@ -67,6 +68,13 @@ func setup(key: String) -> void:
 		G.append(r)
 	H = G.size()
 	W = G[0].size()
+	L = []
+	var hs: Array = board.get("heights", [])
+	for y in H:
+		var r := []
+		for x in W:
+			r.append(int(hs[y][x]) if y < hs.size() and hs[y][x] != "#" else 0)
+		L.append(r)
 
 # ---------------------------------------------------------------- the board
 func build() -> void:
@@ -125,8 +133,15 @@ func build() -> void:
 			if k == "#":
 				_tall(t, p)
 				continue
-			if k == "h":
-				M.part(t, M.box(TS * 0.99, top + 0.02, TS * 0.99), high_m, Vector3(0, top * 0.5 - 0.01, 0))
+			if k == "P":
+				_pillar(t, p)
+				continue
+			if level(p) > 0:
+				# a raised block of stone, its sides showing the climb
+				var hh := top + 0.3
+				M.part(t, M.box(TS * 0.99, hh, TS * 0.99), high_m, Vector3(0, top - hh * 0.5 - 0.005, 0))
+			if k == "=":
+				_steps(t, p, side_m)
 			var fm: Material = floor_m
 			if k == "~":
 				fm = M.mat(Color("2a2620"), 0.4)
@@ -141,7 +156,7 @@ func build() -> void:
 			var gq := PlaneMesh.new()
 			gq.size = Vector2(TS, TS)
 			var lm := lines.duplicate() as StandardMaterial3D
-			lm.albedo_color = _kind_col(k)
+			lm.albedo_color = _kind_col(k if not (k == "." and level(p) > 0) else "h")
 			M.part(t, gq, lm, Vector3(0, top + 0.012, 0))
 			_dress(t, k, top, root_m, egg_m)
 			var ov := MeshInstance3D.new()
@@ -171,10 +186,16 @@ func build() -> void:
 	fill.rotation_degrees = Vector3(-60, 150, 0)
 	root.add_child(fill)
 	cam_focus = Vector3.ZERO
+	if closeup != "":
+		_focus_on(Vector2i.ZERO)
 	_place_cam(true)
 
 func _kind_col(k: String) -> Color:
 	match k:
+		"p":
+			return Color(0.55, 0.75, 1.0, 0.85)
+		"=":
+			return Color(1.0, 0.85, 0.4, 0.95)
 		"c":
 			return Color(0.55, 0.75, 1.0, 0.85)
 		"r":
@@ -211,6 +232,43 @@ func _stone(tex: String, c: Color, scale: float) -> ShaderMaterial:
 		m.set_shader_parameter("tex_scale", scale)
 	return m
 
+# A standing stone pillar, carved: tall cover, blocks shots.
+func _pillar(t: Node3D, p: Vector2i) -> void:
+	var m := _stone("gatestone", Color("8a8274"), 0.35)
+	var b := level(p) * LV
+	M.part(t, M.box(TS * 0.98, b + 0.32, TS * 0.98), _stone("caverock", Color("5a524a"), 0.35), Vector3(0, b - 0.14, 0))
+	M.part(t, M.box(TS * 0.8, 0.22, TS * 0.8), m, Vector3(0, b + 0.11, 0))
+	var hgt := 2.8
+	M.part(t, M.cyl(0.32, 0.36, hgt, 14), m, Vector3(0, b + 0.22 + hgt * 0.5, 0))
+	for i in 3:
+		M.part(t, M.torus_mesh(0.36, 0.035), m, Vector3(0, b + 0.6 + i * 0.9, 0), Vector3.ZERO, Vector3(1, 0.6, 1))
+	M.part(t, M.box(TS * 0.78, 0.2, TS * 0.78), m, Vector3(0, b + 0.22 + hgt + 0.1, 0), Vector3(0, rng.randf_range(-6, 6), 0))
+
+# A broken pillar: a stump and a fallen drum. Low cover.
+func _stump(t: Node3D, top: float) -> void:
+	var m := _stone("gatestone", Color("8a8274"), 0.35)
+	M.part(t, M.cyl(0.3, 0.34, 0.75, 12), m, Vector3(-0.15, top + 0.37, -0.1), Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)))
+	M.part(t, M.cyl(0.28, 0.28, 0.6, 12), m, Vector3(0.25, top + 0.26, 0.25), Vector3(0, rng.randf_range(0, 180), 90))
+
+# Steps cut in the stone, up toward the higher neighbour.
+func _steps(t: Node3D, p: Vector2i, m: Material) -> void:
+	var hi := Vector2i.ZERO
+	var best := level(p)
+	for d in DIRS:
+		var n: Vector2i = p + d
+		if tile(n) != null and tile(n) != "#" and level(n) > best:
+			best = level(n)
+			hi = d
+	if hi == Vector2i.ZERO:
+		return
+	var top := top_y(p)
+	for i in 3:
+		var f := (i + 1) / 4.0
+		var piv := Node3D.new()
+		piv.rotation.y = atan2(-float(hi.x), -float(hi.y))
+		t.add_child(piv)
+		M.part(piv, M.box(TS * 0.9, LV * f, TS * 0.22), m, Vector3(0, top + LV * f * 0.5, -TS * (0.06 + i * 0.16)))
+
 func _tall(t: Node3D, p: Vector2i) -> void:
 	var m := _stone("caverock", Color("5a524a"), 0.35)
 	var hgt := 2.4 + rng.randf() * 1.2
@@ -220,6 +278,8 @@ func _tall(t: Node3D, p: Vector2i) -> void:
 func _dress(t: Node3D, k: String, top: float, root_m: Material, egg_m: Array) -> void:
 	var nest: bool = board.get("dress", "") == "nest"
 	match k:
+		"p":
+			_stump(t, top)
 		"c":
 			if nest:
 				# a clutch of egg sacs, waist-high: cover
@@ -278,15 +338,23 @@ func _make_ov_mats() -> void:
 func tile(p: Vector2i):
 	if p.x < 0 or p.y < 0 or p.x >= W or p.y >= H:
 		return null
+	var k: String = G[p.y][p.x]
+	return {"P": "#", "p": "c", "=": "."}.get(k, k)
+
+func raw(p: Vector2i) -> String:
 	return G[p.y][p.x]
+
+func level(p: Vector2i) -> int:
+	if p.x < 0 or p.y < 0 or p.x >= W or p.y >= H:
+		return 0
+	return L[p.y][p.x]
 
 func top_y(p: Vector2i) -> float:
 	var k = tile(p)
-	if k == "h":
-		return HIGH
+	var base := 0.02 + level(p) * LV
 	if k == "~" or k == "w":
-		return 0.02 - SINK
-	return 0.02
+		return base - SINK
+	return base
 
 func tile_pos(p: Vector2i) -> Vector3:
 	return Vector3((p.x - (W - 1) * 0.5) * TS, top_y(p), (p.y - (H - 1) * 0.5) * TS)
@@ -297,7 +365,7 @@ func spawn(id: String, p: Vector2i) -> Dictionary:
 	var u := {"id": id, "name": d.name, "side": d.side, "kind": d.kind, "hp": d.hp, "max": d.hp, "hit": d.hit, "ac": d.ac,
 		"die": d.die, "spd": d.spd, "mv": d.mv, "cards": d.cards.duplicate(), "pos": p,
 		"face": Vector2i(0, 1) if d.side == "foe" else Vector2i(0, -1), "ct": float(rng.randi_range(1, 30)),
-		"res": 0, "used": {}, "stun": 0, "alive": true, "moved": false, "acted": false, "mv0": []}
+		"res": 0, "used": {}, "stun": 0, "climb": d.get("climb", false), "alive": true, "moved": false, "acted": false, "mv0": []}
 	if id == "you":
 		var nm: String = main.story.S.get("name", "")
 		u.name = nm if nm != "" else "You"
@@ -392,24 +460,32 @@ func me():
 	return null
 
 # ---------------------------------------------------------------- the rules (2D Tactical Advantage)
-func cost(from: Vector2i, to: Vector2i) -> int:
+# Steps a move costs. Climbing a level costs 2 (the 2D high ground rule), or 1 on cut steps;
+# two levels at once can't be climbed, and a drop of three can't be taken. Spiders climb anything.
+func cost(from: Vector2i, to: Vector2i, u = null) -> int:
 	var t = tile(to)
 	if t == null or t == "#" or t == "w":
 		return 999
+	var dl := level(to) - level(from)
+	var climber: bool = u != null and u.get("climb", false)
+	if not climber:
+		if dl >= 2 or dl <= -3:
+			return 999
+	var c := 1
 	if tile(from) == "~":
-		return 2
+		c = 2
 	if t == "r":
-		return 2
-	if t == "h" and tile(from) != "h":
-		return 2
-	return 1
+		c = 2
+	if dl == 1 and not climber and raw(to) != "=" and raw(from) != "=":
+		c = max(c, 2)
+	return c
 
 # ice: keep sliding until something stops you
 func slide_end(p: Vector2i, d: Vector2i, mover) -> Vector2i:
 	while tile(p) == "i":
 		var n := p + d
 		var t = tile(n)
-		if t == null or t in ["#", "c", "h", "w"]:
+		if t == null or t in ["#", "c", "w"] or level(n) != level(p):
 			break
 		var o = at(n)
 		if o != null and o != mover:
@@ -434,7 +510,7 @@ func reachable(u: Dictionary) -> Dictionary:
 			var o = at(n)
 			if o != null and o.side != u.side:
 				continue
-			var nc := cc + cost(c, n)
+			var nc := cc + cost(c, n, u)
 			if nc > u.mv:
 				continue
 			var e := slide_end(n, d, u) if tile(n) == "i" else n
@@ -504,6 +580,8 @@ func targets(u: Dictionary, k: String, from: Vector2i) -> Array:
 	var out := []
 	for t in living():
 		if t.side != u.side and t != u and in_range(u, c, t.pos, from):
+			if c.get("melee", false) and abs(level(t.pos) - level(from)) >= 2 and not u.get("climb", false):
+				continue  # two levels up or down is out of an arm's reach
 			out.append(t.pos)
 	return out
 
@@ -511,7 +589,7 @@ func mods(a: Dictionary, t: Dictionary, from: Vector2i) -> Array:
 	var m := []
 	var ta = tile(from)
 	var tt = tile(t.pos)
-	if ta == "h" and tt != "h":
+	if level(from) > level(t.pos):
 		m.append(["from above", 1])
 	if ta == "r":
 		m.append(["bad footing", -1])
@@ -814,7 +892,7 @@ func hit(a: Dictionary, t: Dictionary, c: Dictionary) -> void:
 	var die: Array = c.get("die", a.die)
 	var n: int = die[0] * (2 if crit else 1) * (2 if c.get("twice", false) else 1)
 	var dmg := roll([n, die[1], die[2]])
-	if tile(a.pos) == "h" and tile(t.pos) != "h":
+	if level(a.pos) > level(t.pos):
 		dmg += 1
 	if is_charge(a, t, c):
 		dmg += 2
@@ -834,8 +912,8 @@ func shove(a: Dictionary, t: Dictionary) -> void:
 	var n: Vector2i = t.pos + d
 	var nt = tile(n)
 	var o2 = at(n)
-	if nt == null or nt == "#" or nt == "w":
-		_log("%s slams into %s" % [t.name, "the edge" if nt == null else ("the water" if nt == "w" else "rock")])
+	if nt == null or nt == "#" or nt == "w" or level(n) - level(t.pos) >= 1:
+		_log("%s slams into %s" % [t.name, "the edge" if nt == null else ("the water" if nt == "w" else ("the ledge" if nt != "#" else "rock"))])
 		await hurt(t, rng.randi_range(1, 4))
 	elif o2 != null:
 		var x := rng.randi_range(1, 4)
@@ -843,14 +921,18 @@ func shove(a: Dictionary, t: Dictionary) -> void:
 		await hurt(t, x)
 		await hurt(o2, x)
 	else:
-		var fall: bool = tile(t.pos) == "h" and nt != "h"
+		var drop: int = level(t.pos) - level(n)
+		var fall: bool = drop >= 1
 		t.pos = n
 		var tw := create_tween()
 		tw.tween_property(t.node, "position", tile_pos(n), 0.25).set_trans(Tween.TRANS_QUAD)
 		await tw.finished
 		if fall:
 			_log("%s goes off the ledge" % t.name)
-			await hurt(t, rng.randi_range(1, 6))
+			var fd := 0
+			for i in drop:
+				fd += rng.randi_range(1, 6)
+			await hurt(t, fd)
 		elif nt == "~":
 			_log("%s is shoved into the sinking ground" % t.name)
 			_say(t, "sinking")
@@ -962,6 +1044,7 @@ func plan(u: Dictionary) -> Dictionary:
 				var sc: float = odds(u, t, k, p) * av + (8.0 if av >= t.hp else 0.0) + (2.0 if t.id == "you" else 0.0) \
 					+ (3.0 if t.kind == "cap" else 0.0) - c.get("cost", 0) * 1.5 + (1.5 if c.get("stun", false) else 0.0)
 				sc -= sink + (0.0 if p != u.pos else -0.3)
+				sc += 0.3 * level(p)
 				if sc > 0.0 and (best == null or sc > best.sc):
 					best = {"sc": sc, "k": k, "p": p, "t": t, "r": r}
 	if best != null:
@@ -974,7 +1057,7 @@ func plan(u: Dictionary) -> Dictionary:
 		dd += 4.0 if tile(p) == "~" else 0.0
 		# the ground's worth: cover and height draw them, as players learn to
 		dd -= 0.6 if tile(p) == "c" else 0.0
-		dd -= 0.8 if tile(p) == "h" else 0.0
+		dd -= 0.5 * level(p)
 		if bs == null or dd < bs.dd:
 			bs = {"dd": dd, "p": p, "r": r}
 	return bs if bs != null else {}
@@ -1034,7 +1117,15 @@ func _active_glow() -> void:
 func _say(u: Dictionary, t: String, c := Color("e8e0c0")) -> void:
 	world.float_text(u.node.position + Vector3(0, 1.5, 0), t, c)
 
+var closeup := ""   # a piece's id: the camera stays close on it (for stills)
 func _focus_on(p: Vector2i) -> void:
+	if closeup != "":
+		for u in units:
+			if u.id == closeup and u.alive:
+				var cu := tile_pos(u.pos)
+				cam_focus = Vector3(cu.x, cu.y + 0.6, cu.z - 0.6)
+				cam_zoom = 0.36
+				return
 	var t := tile_pos(p)
 	cam_focus = Vector3(t.x * 0.35, 0, t.z * 0.35)
 

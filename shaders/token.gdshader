@@ -10,7 +10,7 @@ uniform vec4 rim_col : source_color = vec4(0.79, 0.66, 0.31, 1.0);
 uniform float medal = 0.0;    // 1: the art is a whole medallion (no extra frame round it)
 uniform float active = 0.0;   // glows gold when it's this piece's turn
 uniform float down = 0.0;     // greyed when beaten
-uniform float light = 1.2;
+uniform float light = 0.92;
 
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
@@ -24,7 +24,7 @@ void fragment() {
 		if (medal > 0.5 && a.a < 0.5) {
 			c = vec3(0.08, 0.06, 0.05);
 		} else {
-			c = smoothstep(vec3(0.0), vec3(0.75), a.rgb);
+			c = a.rgb;
 		}
 		// a soft vignette, like the 2D mat's minis
 		c *= mix(1.0, 0.72, smoothstep(inner * 0.6, inner, r));

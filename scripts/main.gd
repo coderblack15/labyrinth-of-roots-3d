@@ -72,6 +72,9 @@ func _battle() -> void:
 	battle.rng = rng
 	battle.auto = autoplay
 	battle.demo = "--demo" in OS.get_cmdline_user_args()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--closeup="):
+			battle.closeup = a.substr(10)
 	battle.fast = fast
 	battle.setup(battle_key)
 	add_child(battle)

@@ -153,6 +153,10 @@ func _fill_key() -> void:
 	for row in battle.G:
 		for ch in row:
 			used[ch] = true
+	for row in battle.L:
+		for lv in row:
+			if lv > 0:
+				used["h"] = true
 	var r := RichTextLabel.new()
 	r.bbcode_enabled = true
 	r.fit_content = true
@@ -160,10 +164,11 @@ func _fill_key() -> void:
 	r.add_theme_font_size_override("normal_font_size", 15)
 	r.add_theme_font_size_override("bold_font_size", 15)
 	var t := "[b]The ground on this board[/b]\n"
-	for k in [".", "c", "#", "r", "h", "~", "i", "o", "w"]:
+	for k in [".", "c", "p", "#", "P", "r", "h", "=", "~", "i", "o", "w"]:
 		if used.has(k):
 			var g: Array = MAPS.GROUND[k]
 			t += "\n[color=#%s]■[/color] [b]%s[/b]: %s" % [battle._kind_col(k).to_html(false), g[0], g[1]]
+	t += "\n\n[i]Spiders and Ryytaa climb anything, and reach up or down any height.[/i]"
 	r.text = t
 	v.add_child(r)
 	var b := Button.new()
@@ -253,12 +258,14 @@ func info(t: String) -> void:
 	info_lbl.text = t
 
 func tile_info(b, p: Vector2i) -> void:
-	var k = b.tile(p)
-	if k == null:
+	if b.tile(p) == null:
 		return
+	var k: String = b.raw(p)
 	var g: Array = MAPS.GROUND[k]
 	var u = b.at(p)
-	var t := "[b]%s[/b]: %s" % [g[0], g[1]]
+	var t := "[b]%s[/b]%s: %s" % [g[0], (", level %d" % b.level(p)) if b.level(p) > 0 else "", g[1]]
+	if b.level(p) > 0:
+		t += "\n[b]High ground[/b]: " + MAPS.GROUND["h"][1]
 	if u != null:
 		t = "[b]%s[/b], HP %d/%d, AC %d, standing on %s.\n" % [u.name, u.hp, u.max, u.ac, g[0].to_lower()] + t
 	info(t)
