@@ -107,7 +107,7 @@ const CARDS := {
 }
 
 # Who fights. hit and ac as in the story (Parts I–IV); Burr from TA_CO (hp 45% of yours,
-# AC one under yours, speed 12, 4 steps, Bite and Drag Down). Ryytaa is the captain:
+# AC one under yours, speed 12, 4 steps, Bite and Drag Down). Ryytaa (hp 28) is the captain, tougher than the 2D one so the boss fight runs longer:
 # drop her and the rest break.
 const UNITS := {
 	"you": {"name": "You", "side": "you", "kind": "you", "hp": 24, "hit": 5, "ac": 13, "die": [1, 12, 3], "spd": 10, "mv": 3,
@@ -116,6 +116,6 @@ const UNITS := {
 		"cards": ["bite", "drag"], "art": "res://art/pieces/tok_burr.webp", "small": true},
 	"spider": {"name": "Spider", "side": "foe", "kind": "sol", "hp": 6, "hit": 4, "ac": 12, "die": [1, 4, 1], "spd": 7, "mv": 3,
 		"cards": ["strike", "spray"], "art": "res://art/pieces/tok_spider.png", "medal": true, "climb": true},
-	"ryytaa": {"name": "Ryytaa", "side": "foe", "kind": "cap", "hp": 22, "hit": 5, "ac": 13, "die": [1, 8, 2], "spd": 8, "mv": 3,
+	"ryytaa": {"name": "Ryytaa", "side": "foe", "kind": "cap", "hp": 28, "hit": 5, "ac": 13, "die": [1, 8, 1], "spd": 8, "mv": 3,
 		"cards": ["strike", "heavy"], "art": "res://art/pieces/tok_ryytaa.webp", "big": true, "climb": true},
 }

@@ -159,6 +159,7 @@ func build() -> void:
 			lm.albedo_color = _kind_col(k if not (k == "." and level(p) > 0) else "h")
 			M.part(t, gq, lm, Vector3(0, top + 0.012, 0))
 			_dress(t, k, top, root_m, egg_m)
+			_greenery(t, p, k, top)
 			var ov := MeshInstance3D.new()
 			var om := PlaneMesh.new()
 			om.size = Vector2(TS * 0.86, TS * 0.86)
@@ -167,6 +168,11 @@ func build() -> void:
 			ov.visible = false
 			t.add_child(ov)
 			overlays[p] = ov
+	for y in H:
+		for x in W:
+			if G[y][x] in ["P", "#"]:
+				_pillar_growth(tile_nodes[Vector2i(x, y)], Vector2i(x, y))
+	_rim()
 	for u in board.units:
 		spawn(u[0], Vector2i(u[1], u[2]))
 	# a warm lamp over the table and a cool fill, so the board and its pieces read
@@ -275,6 +281,107 @@ func _tall(t: Node3D, p: Vector2i) -> void:
 	M.part(t, M.box(TS * 0.98, hgt, TS * 0.98), m, Vector3(0, hgt * 0.5, 0), Vector3(0, rng.randf_range(-5, 5), 0))
 	M.part(t, M.sph(TS * 0.55, 8), m, Vector3(rng.randf_range(-0.1, 0.1), hgt, 0), Vector3.ZERO, Vector3(1, 0.5, 1))
 
+# What grows on the board: kept low, so it never hides a piece or the ground's colour.
+var plant_m := {}
+var glows_left := 6
+
+func _plants() -> Dictionary:
+	if plant_m.is_empty():
+		plant_m = {
+			"fern": M.mat(Color("4a6a34"), 0.8), "moss": M.mat(Color("3e5a2e"), 1.0),
+			"stalk": M.mat(Color("d8d0b0"), 0.7), "cap": M.mat(Color("cfe0a0"), 0.5, Color("9fe0a0"), 0.6),
+			"root": _stone("root", Color("6a4a32"), 0.6),
+		}
+	return plant_m
+
+func _greenery(t: Node3D, p: Vector2i, k: String, top: float) -> void:
+	if not k in [".", "c", "r", "="]:
+		return
+	# more growth by the walls and the edges, where the damp sits
+	var near := 0
+	for d in DIRS:
+		var n: Vector2i = p + d
+		if tile(n) == null or tile(n) == "#":
+			near += 1
+	var chance := 0.12 + near * 0.18
+	if rng.randf() > chance:
+		return
+	var pm := _plants()
+	var corner := Vector3(rng.randf_range(-0.38, 0.38), 0, rng.randf_range(-0.38, 0.38))
+	corner = corner.normalized() * 0.4 if corner.length() > 0.01 else Vector3(0.4, 0, 0.4)
+	for i in rng.randi_range(1, 3):
+		var o := corner + Vector3(rng.randf_range(-0.12, 0.12), 0, rng.randf_range(-0.12, 0.12))
+		var m := M.part(t, M.sph(rng.randf_range(0.12, 0.22), 7), pm.moss, Vector3(o.x, top + 0.02, o.z), Vector3.ZERO, Vector3(1, 0.22, 1))
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if rng.randf() < 0.35:
+		_cap_cluster(t, Vector3(corner.x, top, corner.z) * Vector3(0.9, 1, 0.9))
+
+func _cap_cluster(t: Node3D, o: Vector3) -> void:
+	var pm := _plants()
+	for i in rng.randi_range(2, 3):
+		var q := o + Vector3(rng.randf_range(-0.1, 0.1), 0, rng.randf_range(-0.1, 0.1))
+		var h := rng.randf_range(0.08, 0.2)
+		M.part(t, M.cyl(0.015, 0.022, h, 6), pm.stalk, q + Vector3(0, h * 0.5, 0))
+		M.part(t, M.sph(rng.randf_range(0.04, 0.08), 7), pm.cap, q + Vector3(0, h, 0), Vector3.ZERO, Vector3(1, 0.45, 1))
+	if glows_left > 0 and rng.randf() < 0.5:
+		glows_left -= 1
+		var l := OmniLight3D.new()
+		l.light_color = Color("9fe0a0")
+		l.light_energy = 0.35
+		l.omni_range = 1.6
+		l.position = o + Vector3(0, 0.3, 0)
+		t.add_child(l)
+
+func _fern(parent: Node3D, at: Vector3, s: float) -> void:
+	var pm := _plants()
+	var k := rng.randi_range(5, 8)
+	for i in k:
+		var a := TAU * i / k + rng.randf() * 0.4
+		var leaf := M.part(parent, M.sph(0.12, 6), pm.fern, at + Vector3(cos(a), 0.0, sin(a)) * 0.28 * s + Vector3(0, 0.22 * s, 0),
+			Vector3(0, -rad_to_deg(a), 35), Vector3(3.2 * s, 0.25, 0.9 * s))
+		leaf.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+# Moss up the foot of a pillar or rock, and a root or two hanging off its top.
+func _pillar_growth(t: Node3D, p: Vector2i) -> void:
+	var pm := _plants()
+	var b := level(p) * LV
+	for i in rng.randi_range(2, 4):
+		var a := rng.randf() * TAU
+		M.part(t, M.sph(rng.randf_range(0.14, 0.24), 7), pm.moss, Vector3(cos(a) * 0.38, b + 0.25 + rng.randf() * 0.4, sin(a) * 0.38), Vector3.ZERO, Vector3(1, 1.6, 0.5))
+	if rng.randf() < 0.6:
+		for i in rng.randi_range(1, 2):
+			var a2 := rng.randf() * TAU
+			var len := rng.randf_range(0.8, 1.6)
+			M.part(t, M.cyl(0.035, 0.05, len, 6), pm.root, Vector3(cos(a2) * 0.4, b + 3.0 - len * 0.5, sin(a2) * 0.4), Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8)))
+
+# A ring of ferns and roots round the board's edge, off the playing squares.
+func _rim() -> void:
+	var pm := _plants()
+	var hx := W * TS * 0.5 + 0.45
+	var hz := H * TS * 0.5 + 0.45
+	var n := (W + H) * 2
+	for i in n:
+		var f := float(i) / n
+		var at: Vector3
+		var per := 2.0 * (hx + hz)
+		var d := f * per
+		if d < 2 * hx:
+			at = Vector3(-hx + d, 0, -hz)
+		elif d < 2 * hx + 2 * hz:
+			at = Vector3(hx, 0, -hz + d - 2 * hx)
+		elif d < 4 * hx + 2 * hz:
+			at = Vector3(hx - (d - 2 * hx - 2 * hz), 0, hz)
+		else:
+			at = Vector3(-hx, 0, hz - (d - 4 * hx - 2 * hz))
+		at += Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
+		var r := rng.randf()
+		if r < 0.55:
+			_fern(root, at, rng.randf_range(0.7, 1.2))
+		elif r < 0.85:
+			M.part(root, M.sph(rng.randf_range(0.3, 0.5), 8), pm.moss, at, Vector3.ZERO, Vector3(1, 0.3, 1))
+		else:
+			_cap_cluster(root, at)
+
 func _dress(t: Node3D, k: String, top: float, root_m: Material, egg_m: Array) -> void:
 	var nest: bool = board.get("dress", "") == "nest"
 	match k:
@@ -366,6 +473,8 @@ func spawn(id: String, p: Vector2i) -> Dictionary:
 		"die": d.die, "spd": d.spd, "mv": d.mv, "cards": d.cards.duplicate(), "pos": p,
 		"face": Vector2i(0, 1) if d.side == "foe" else Vector2i(0, -1), "ct": float(rng.randi_range(1, 30)),
 		"res": 0, "used": {}, "stun": 0, "climb": d.get("climb", false), "alive": true, "moved": false, "acted": false, "mv0": []}
+	if id == "you" and start_hp > 0:
+		u.hp = min(start_hp, u.max)
 	if id == "you":
 		var nm: String = main.story.S.get("name", "")
 		u.name = nm if nm != "" else "You"
@@ -1117,6 +1226,7 @@ func _active_glow() -> void:
 func _say(u: Dictionary, t: String, c := Color("e8e0c0")) -> void:
 	world.float_text(u.node.position + Vector3(0, 1.5, 0), t, c)
 
+var start_hp := 0
 var closeup := ""   # a piece's id: the camera stays close on it (for stills)
 func _focus_on(p: Vector2i) -> void:
 	if closeup != "":

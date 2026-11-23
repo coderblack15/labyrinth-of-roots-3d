@@ -277,7 +277,7 @@ func log_line(s: String) -> void:
 	logs = logs.slice(0, 3)
 	log_lbl.text = "\n".join(logs)
 
-func result(r: String, b) -> void:
+func result(r: String, b, after := "Fight again") -> void:
 	for c in cards_box.get_children():
 		c.queue_free()
 	var good := r == "victory"
@@ -285,7 +285,7 @@ func result(r: String, b) -> void:
 		("Ryytaa is down and the brood breaks." if "ryytaa" in b.board.get("captains", []) else "The brood is beaten.") if good else "Vaelric's axe holds you at 1 HP. Try the ground another way.")
 	info("[b]%s[/b]" % ("The nest is yours." if good else "You're out of the fight, but not out of the labyrinth."))
 	var again := Button.new()
-	again.text = "Fight again"
+	again.text = after
 	again.custom_minimum_size = Vector2(0, 44)
 	again.pressed.connect(func(): b.picked.emit({"type": "again"}))
 	cards_box.add_child(again)

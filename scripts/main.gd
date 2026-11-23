@@ -7,6 +7,7 @@
 #   --shots=DIR       saves screenshots at the story's key moments
 #   --fast            no typewriter, short waits (for headless runs)
 #   --look            the painted diorama look (test)
+#   --explore=KEY     walk a dungeon (scripts/explore/dungeons.gd), its fights on the tactics board
 #   --battle=KEY      straight into a tactics battle (nest, gallery); with --autoplay both sides play themselves
 extends Node3D
 
@@ -38,7 +39,7 @@ func _ready() -> void:
 	world = preload("res://scripts/world.gd").new()
 	world.name = "World"
 	world.main = self
-	world.look = "--look" in OS.get_cmdline_user_args() or Array(OS.get_cmdline_user_args()).any(func(a): return a.begins_with("--battle="))
+	world.look = "--look" in OS.get_cmdline_user_args() or Array(OS.get_cmdline_user_args()).any(func(a): return a.begins_with("--battle=") or a.begins_with("--explore="))
 	add_child(world)
 	ui = preload("res://scripts/ui.gd").new()
 	ui.name = "UI"
@@ -55,7 +56,13 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--battle="):
 			battle_key = a.substr(9)
-	if battle_key != "":
+	var dungeon := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--explore="):
+			dungeon = a.substr(10)
+	if dungeon != "":
+		await _explore(dungeon)
+	elif battle_key != "":
 		await _battle()
 	else:
 		story.run()
@@ -65,6 +72,15 @@ var battle
 
 # The tactics battle (scripts/tactics/): the painted look, the board, its screen.
 func _battle() -> void:
+	while true:
+		var r := await run_battle(battle_key, 0, "Fight again")
+		if autoplay:
+			get_tree().quit()
+			return
+
+# One fight on the tactics board: build it, play it, show the result, clear it away.
+# hp: your HP going in (0 = full). Returns {"result", "hp"}.
+func run_battle(key: String, hp := 0, after := "Continue") -> Dictionary:
 	battle = preload("res://scripts/tactics/battle.gd").new()
 	battle.name = "Battle"
 	battle.main = self
@@ -72,11 +88,12 @@ func _battle() -> void:
 	battle.rng = rng
 	battle.auto = autoplay
 	battle.demo = "--demo" in OS.get_cmdline_user_args()
+	battle.start_hp = hp
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--closeup="):
 			battle.closeup = a.substr(10)
 	battle.fast = fast
-	battle.setup(battle_key)
+	battle.setup(key)
 	add_child(battle)
 	var bui = preload("res://scripts/tactics/battle_ui.gd").new()
 	bui.main = self
@@ -86,17 +103,42 @@ func _battle() -> void:
 	await get_tree().process_frame
 	ui.fade_in(0.8)
 	var r: String = await battle.run()
-	bui.result(r, battle)
-	await shot("end")
+	bui.result(r, battle, after)
+	await shot("battle-" + key)
+	if autoplay:
+		await get_tree().create_timer(1.5).timeout
+	else:
+		while true:
+			var ev: Dictionary = await battle.picked
+			if ev.type == "again":
+				break
+	var you = battle.me()
+	var left: int = you.hp if you != null else 0
+	await ui.fade_out(0.6)
+	bui.queue_free()
+	battle.queue_free()
+	battle = null
+	world.player.visible = true
+	world.player.process_mode = Node.PROCESS_MODE_INHERIT
+	world.set_physics_process(true)
+	world.set_process_unhandled_input(true)
+	world.joy.visible = true
+	world.cam_fixed = false
+	return {"result": r, "hp": left}
+
+var explore
+func _explore(key: String) -> void:
+	explore = preload("res://scripts/explore/explore.gd").new()
+	explore.name = "Explore"
+	explore.main = self
+	explore.world = world
+	explore.auto = autoplay
+	add_child(explore)
+	var r: String = await explore.run(key)
+	print("== DUNGEON ", r)
 	if autoplay:
 		await get_tree().create_timer(1.0).timeout
 		get_tree().quit()
-		return
-	while true:
-		var ev: Dictionary = await battle.picked
-		if ev.type == "again":
-			get_tree().reload_current_scene()
-			return
 
 # Keeps text readable on phones and desktops alike: the UI scale follows the screen,
 # and the 3D camera is told how much of the screen the story panel covers.
