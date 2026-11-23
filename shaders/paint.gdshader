@@ -6,8 +6,10 @@ uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
 uniform int radius = 2;
 uniform float ink = 0.25;
 uniform float grain = 0.03;
-uniform vec3 shadow_tint : source_color = vec3(0.16, 0.14, 0.22);
-uniform vec3 light_tint : source_color = vec3(1.0, 0.92, 0.80);
+uniform vec3 shadow_tint : source_color = vec3(0.05, 0.13, 0.17);
+uniform float saturation = 1.1;
+uniform float contrast = 0.35;
+uniform vec3 light_tint : source_color = vec3(1.04, 0.95, 0.84);
 
 float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -45,12 +47,13 @@ void fragment() {
 	float e = smoothstep(0.12, 0.35, sqrt(lx * lx + ly * ly));
 	col *= 1.0 - e * ink * 0.6;
 
-	// grade: tinted shadows, warm lights, a touch more contrast
+	// grade: teal in the shadows, amber in the lights, richer colour, an S-curve
 	float l = lum(col);
-	col = mix(col, col * light_tint * 1.1, smoothstep(0.35, 0.9, l));
-	col += shadow_tint * 0.12 * (1.0 - smoothstep(0.0, 0.35, l));
-	col = mix(vec3(l), col, 1.08);
-	col = (col - 0.5) * 1.06 + 0.5;
+	col += shadow_tint * (1.0 - smoothstep(0.0, 0.45, l)) * 0.35;
+	col = mix(col, col * light_tint * 1.12, smoothstep(0.35, 0.95, l));
+	col = mix(vec3(lum(col)), col, saturation);
+	col = clamp(col, 0.0, 1.0);
+	col = mix(col, col * col * (3.0 - 2.0 * col), contrast);
 
 	// canvas grain and weave
 	vec2 fc = FRAGCOORD.xy;

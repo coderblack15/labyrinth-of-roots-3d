@@ -4,6 +4,8 @@ extends RefCounted
 
 const M = preload("res://scripts/models.gd")
 const ROCK = preload("res://shaders/rock.gdshader")
+# Sculpted sets switched on so far (the others are built but still being placed).
+const SETS_READY := ["pathway"]
 
 static func rock(base: Color, disp := 0.25, moss := 0.5, strata := 0.5, scale := 0.55) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
@@ -67,7 +69,7 @@ static func dress(world, name: String) -> void:
 			base = c.lerp(Color("6e6862"), 0.6)
 		mi.material_override = rock(base, disp, 0.6 if name == "pathway" else 0.15, 0.0 if flat else 0.5)
 	var set_path := "res://models/set_%s.glb" % name
-	if ResourceLoader.exists(set_path):
+	if name in SETS_READY and ResourceLoader.exists(set_path):
 		_diorama(world, set_path)
 	match name:
 		"pathway":
@@ -77,6 +79,12 @@ static func dress(world, name: String) -> void:
 
 # Surfaces of a sculpted set, by material name: [colour, moss, strata, streaks].
 const SURF := {
+	"wallstone": [Color("4a4640"), 0.2, 0.3, 0.3],
+	"cavefloor": [Color("3a342c"), 0.1, 0.0, 0.0],
+	"caverock": [Color("4a443e"), 0.1, 0.4, 0.2],
+	"bark": [Color("5a4634"), 0.1, 0.0, 0.9],
+	"thorn": [Color("bcb89e"), 0.0, 0.0, 0.0],
+	"bone": [Color("cfc7b0"), 0.0, 0.0, 0.0],
 	"cliff": [Color("66625c"), 0.35, 0.2, 0.3],
 	"gatestone": [Color("62605a"), 0.3, 0.3, 0.25],
 	"ground": [Color("4a4436"), 0.9, 0.0, 0.0],
@@ -87,13 +95,30 @@ const SURF := {
 
 # A Blender-sculpted set replaces the stage's blocks; the blocks stay for walking into.
 static func _diorama(world, path: String) -> void:
+	# hide only the stage's plain scenery: not story props, webs, glows or the dark voids
+	var keep := {}
+	for v in world.props.values():
+		for x in (v if v is Array else [v]):
+			if x is Node:
+				keep[x] = true
 	for n in world.stage.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
-		if mi.mesh is PrimitiveMesh:
-			var sm = mi.material_override
-			var dark: bool = sm is StandardMaterial3D and sm.albedo_color.get_luminance() < 0.04
-			if not dark:
-				mi.visible = false
+		if not mi.mesh is PrimitiveMesh:
+			continue
+		var par := mi.get_parent()
+		if not (par == world.stage or (par is StaticBody3D and par.get_parent() == world.stage)):
+			continue
+		if keep.has(mi) or keep.has(par):
+			continue
+		var sm = mi.material_override
+		if sm is ShaderMaterial and sm.shader == ROCK:
+			mi.visible = false
+			continue
+		if not sm is StandardMaterial3D or sm.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or sm.emission_enabled or sm.albedo_texture:
+			continue
+		if sm.albedo_color.get_luminance() < 0.04:
+			continue
+		mi.visible = false
 	var set_node: Node3D = M.glb(path.get_file().get_basename())
 	world.stage.add_child(set_node)
 	world.props.diorama = true
@@ -102,6 +127,8 @@ static func _diorama(world, path: String) -> void:
 		for i in mi.mesh.get_surface_count():
 			var src := mi.mesh.surface_get_material(i)
 			var key := src.resource_name if src else ""
+			if key in ["ember", "silk"]:
+				continue  # glowing cracks and silk keep their own materials
 			var spec: Array = SURF.get(key, [Color("5a5650"), 0.3, 0.3, 0.0])
 			var m := rock(spec[0], 0.0, spec[1], spec[2])
 			m.set_shader_parameter("streaks", spec[3])

@@ -47,6 +47,11 @@ var walk_t := 0.0
 var music: AudioStreamPlayer
 var music_key := ""
 var look := false  # painterly look pass (scripts/look.gd)
+var rim: DirectionalLight3D  # back light that outlines the figures (look pass)
+var cam_yaw := 0.0       # the player turns the camera round the hero (Q/E, right-drag, two fingers)
+var joy                  # on-screen thumb stick (scripts/joystick.gd)
+var touch_start := {}    # finger index -> [start position, start time]
+var demo_input := Vector2.ZERO  # scripted stick input, for recording clips
 
 func _ready() -> void:
 	env = Environment.new()
@@ -59,7 +64,13 @@ func _ready() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
 	if look:
+		rim = DirectionalLight3D.new()
+		rim.light_cull_mask = 2
+		rim.light_energy = 0.0
+		rim.shadow_enabled = false
+		add_child(rim)
 		env.glow_enabled = true
+		env.glow_hdr_threshold = 0.85
 		env.glow_intensity = 0.9
 		env.glow_bloom = 0.15
 		LOOK.add_filter(self)
@@ -118,6 +129,11 @@ func _ready() -> void:
 	music = AudioStreamPlayer.new()
 	music.volume_db = -8.0
 	add_child(music)
+	var jl := CanvasLayer.new()
+	jl.layer = 4
+	add_child(jl)
+	joy = preload("res://scripts/joystick.gd").new()
+	jl.add_child(joy)
 
 func _make_ring() -> Node3D:
 	var r := Node3D.new()
@@ -181,8 +197,19 @@ func _physics_process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 			k.x += 1
 		if k != Vector2.ZERO:
+			k = k.normalized()
+		if joy and joy.active and joy.value.length() > 0.15:
+			k = joy.value
+		if demo_input != Vector2.ZERO:
+			k = demo_input
+		if Input.is_key_pressed(KEY_Q):
+			cam_yaw += delta * 1.8
+		if Input.is_key_pressed(KEY_E):
+			cam_yaw -= delta * 1.8
+		if k != Vector2.ZERO:
 			target = null
-			dir = Vector3(k.x, 0, k.y).normalized()
+			# walk relative to where the camera looks
+			dir = Vector3(k.x, 0, k.y).rotated(Vector3.UP, cam_yaw) * min(1.0, k.length())
 	if dir == Vector3.ZERO and target != null:
 		var to: Vector3 = target - player.global_position
 		to.y = 0
@@ -193,7 +220,7 @@ func _physics_process(delta: float) -> void:
 				arrived.emit()
 		else:
 			dir = to.normalized()
-	var spd := speed * (0.45 if crouch else 1.0)
+	var spd := speed * (0.45 if crouch else 1.0) * (1.6 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
 	var before := player.global_position
 	player.velocity.x = dir.x * spd
 	player.velocity.z = dir.z * spd
@@ -202,7 +229,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		player.velocity.y -= 20.0 * delta
 	player.move_and_slide()
-	if dir != Vector3.ZERO:
+	if dir.length() > 0.05:
 		var want := atan2(-dir.x, -dir.z)
 		player.rotation.y = lerp_angle(player.rotation.y, want, 1.0 - exp(-delta * 10.0))
 		walk_t += delta * 9.0
@@ -235,8 +262,8 @@ func _process(delta: float) -> void:
 		wp = cam_fixed_pos
 		wl = cam_fixed_look
 	else:
-		wp = player.global_position + cam_offset
-		wl = player.global_position + cam_look_off
+		wp = player.global_position + cam_offset.rotated(Vector3.UP, cam_yaw)
+		wl = player.global_position + cam_look_off.rotated(Vector3.UP, cam_yaw)
 		# Pull the camera in when a wall stands between it and the hero.
 		var head := player.global_position + Vector3(0, 1.6, 0)
 		var q := PhysicsRayQueryParameters3D.create(head, wp)
@@ -254,6 +281,8 @@ func _process(delta: float) -> void:
 	if cam.global_position.distance_to(cam_look + sh) > 0.01:
 		cam.look_at(cam_look + sh, Vector3.UP)
 	_frustum()
+	if rim:
+		rim.rotation.y = PI + cam_yaw
 	if torch_light.visible:
 		var fl := torch_e * (0.35 if torch_dim else 1.0)
 		torch_light.light_energy = fl * (0.88 + 0.12 * sin(Time.get_ticks_msec() * 0.013) * sin(Time.get_ticks_msec() * 0.0071))
@@ -290,7 +319,32 @@ func _frustum() -> void:
 		cam.frustum_offset = Vector2(inset.x * w * 0.5, -inset.y * cam.size * 0.5)
 
 func _unhandled_input(e: InputEvent) -> void:
+	# turning the camera works any time the hero isn't being walked for you
+	if e is InputEventMouseMotion and (e.button_mask & MOUSE_BUTTON_MASK_RIGHT):
+		cam_yaw -= e.relative.x * 0.006
+		return
+	if e is InputEventScreenDrag and e.index == 1:
+		cam_yaw -= e.relative.x * 0.008
+		return
 	if not input_on or auto_walking:
+		if joy and joy.active:
+			joy.end()
+		return
+	if e is InputEventScreenTouch:
+		if e.index == 0:
+			if e.pressed:
+				touch_start[0] = e.position
+			else:
+				touch_start.erase(0)
+				if joy.active:
+					joy.end()
+		return
+	if e is InputEventScreenDrag and e.index == 0:
+		if not joy.active and touch_start.has(0) and e.position.distance_to(touch_start[0]) > 18.0:
+			joy.begin(touch_start[0])
+			target = null
+		if joy.active:
+			joy.drag(e.position)
 		return
 	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 		var from := cam.project_ray_origin(e.position)
@@ -350,8 +404,8 @@ func place_player(p: Vector3, yaw_deg := 0.0) -> void:
 	target = null
 	auto_walking = false
 	if not cam_fixed:
-		cam.global_position = p + cam_offset
-		cam_look = p + cam_look_off
+		cam.global_position = p + cam_offset.rotated(Vector3.UP, cam_yaw)
+		cam_look = p + cam_look_off.rotated(Vector3.UP, cam_yaw)
 
 func wait(t: float) -> void:
 	await get_tree().create_timer(t).timeout
@@ -390,20 +444,27 @@ func set_light(mode: String, t := 1.2) -> void:
 			fog_d = 0.02
 	if look:
 		sun.rotation_degrees = Vector3(-22, -50, 0)
+		var rim_c := Color("9ab8d8")
+		var rim_e := 1.4
 		if mode == "dusk":
-			# the painting's weather: grey cloud and mist, a low warm sun
+			# the painting's weather: grey cloud and mist, a low golden sun
 			sky_top = Color("2e3038")
 			sky_hor = Color("8a8a90")
 			gnd = Color("70727c")
-			amb = Color("8a8c98")
-			amb_e = 0.85
-			sun_e = 1.6
-			fog_c = Color("70727c")
+			amb = Color("6a7a96")
+			amb_e = 0.7
+			sun_e = 1.8
+			fog_c = Color("6e7480")
 			fog_d = 0.006
-			sun.light_color = Color("ffc890")
+			sun.light_color = Color("ffb468")
+			rim_c = Color("ffd49a")
+			rim_e = 2.2
 		elif mode in ["torch", "gems"]:
 			amb = Color("4a4050")
 			amb_e = 0.55
+		rim.light_color = rim_c
+		rim.rotation_degrees = Vector3(-28, 180 + rad_to_deg(cam_yaw), 0)
+		tw.tween_property(rim, "light_energy", rim_e, t)
 	tw.tween_property(sky_mat, "sky_top_color", sky_top, t)
 	tw.tween_property(sky_mat, "sky_horizon_color", sky_hor, t)
 	tw.tween_property(sky_mat, "ground_horizon_color", sky_hor.darkened(0.3), t)

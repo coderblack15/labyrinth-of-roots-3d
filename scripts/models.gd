@@ -29,7 +29,16 @@ static func glb(name: String) -> Node3D:
 	_unown(inner)
 	wrap.remove_child(inner)
 	wrap.free()
+	if not name.begins_with("set_"):
+		_figure_layer(inner)
 	return inner
+
+# Figures sit on render layer 2 as well, so a rim light can catch only them.
+static func _figure_layer(n: Node) -> void:
+	if n is VisualInstance3D:
+		n.layers |= 2
+	for c in n.get_children():
+		_figure_layer(c)
 
 static func _unown(n: Node) -> void:
 	n.owner = null
