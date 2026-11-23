@@ -12,6 +12,7 @@ signal picked(ev)
 const M = preload("res://scripts/models.gd")
 const LOOK = preload("res://scripts/look.gd")
 const MAPS = preload("res://scripts/tactics/maps.gd")
+const DG = preload("res://scripts/explore/dungeons.gd")
 const TOKEN = preload("res://shaders/token.gdshader")
 const TS := 1.2       # one square
 const LV := 0.45      # one level of height (the boards rise in steps)
@@ -59,7 +60,7 @@ var pend = null
 var undo_to = null
 
 func setup(key: String) -> void:
-	board = MAPS.BOARDS[key]
+	board = MAPS.board(key)
 	G = []
 	for row in board.grid:
 		var r := []
@@ -77,8 +78,17 @@ func setup(key: String) -> void:
 		L.append(r)
 
 # ---------------------------------------------------------------- the board
+const COVER := {"roots": "roots", "heart": "roots", "sand": "rocks", "hesk": "rocks", "east": "rocks", "noon": "rocks",
+	"mere": "crates", "well": "crates", "siege": "crates", "tithe": "crates", "vell": "crates", "rime": "ice", "melt": "ice",
+	"glass": "crystal", "ink": "crystal", "fen": "reeds", "jungle": "reeds", "welling": "reeds", "lead": "reeds", "moon": "reeds"}
+
 func build() -> void:
-	world.build(board.stage)
+	th = DG.THEMES.get(board.get("theme", "roots"), DG.THEMES.roots)
+	cover = "eggs" if board.get("dress", "") == "nest" else COVER.get(board.get("theme", "roots"), "roots")
+	if board.stage == "void":
+		_void_stage()
+	else:
+		world.build(board.stage)
 	for k in ["grid", "ryytaa", "sp_a", "sp_b", "sp_c", "sp_d"]:
 		if world.props.has(k):
 			world.props[k].visible = false
@@ -108,10 +118,10 @@ func build() -> void:
 	root.name = "Board"
 	world.stage.add_child(root)
 	_make_ov_mats()
-	var floor_m := _stone("cavefloor", Color("74685a"), 0.3)
-	var side_m := _stone("caverock", Color("5a524a"), 0.35)
-	var high_m := _stone("cliff", Color("7a7062"), 0.3)
-	var root_m := _stone("root", Color("6a4a32"), 0.6)
+	var floor_m := _stone(th.floor[0], (th.floor[1] as Color).lightened(0.06), 0.3)
+	var side_m := _stone(th.wall[0], th.wall[1], 0.35)
+	var high_m := _stone(th.wall[0], (th.wall[1] as Color).lightened(0.18), 0.3)
+	var root_m := _stone(th.trim[0], th.trim[1], 0.6)
 	var egg_m := LOOK.egg_mats()
 	var lines := StandardMaterial3D.new()
 	lines.albedo_texture = _frame_tex()
@@ -287,10 +297,12 @@ var glows_left := 6
 
 func _plants() -> Dictionary:
 	if plant_m.is_empty():
+		var pl: Dictionary = th.plants
 		plant_m = {
-			"fern": M.mat(Color("4a6a34"), 0.8), "moss": M.mat(Color("3e5a2e"), 1.0),
-			"stalk": M.mat(Color("d8d0b0"), 0.7), "cap": M.mat(Color("cfe0a0"), 0.5, Color("9fe0a0"), 0.6),
-			"root": _stone("root", Color("6a4a32"), 0.6),
+			"fern": M.mat(pl.fern, 0.8), "moss": M.mat((pl.moss as Color).darkened(0.15), 1.0),
+			"stalk": M.mat((pl.fungus as Color).darkened(0.2), 0.7), "cap": M.mat(pl.fungus, 0.5, pl.glow, 0.6),
+			"root": _stone(th.trim[0], th.trim[1], 0.6),
+			"crystal": M.mat((pl.fungus as Color), 0.1, pl.glow, 0.5, 0.75, 0.4),
 		}
 	return plant_m
 
@@ -309,12 +321,50 @@ func _greenery(t: Node3D, p: Vector2i, k: String, top: float) -> void:
 	var pm := _plants()
 	var corner := Vector3(rng.randf_range(-0.38, 0.38), 0, rng.randf_range(-0.38, 0.38))
 	corner = corner.normalized() * 0.4 if corner.length() > 0.01 else Vector3(0.4, 0, 0.4)
+	var flora: String = th.get("flora", "cave")
+	if flora in ["ice", "glass"]:
+		_crystals(t, Vector3(corner.x, top, corner.z), 0.5)
+		return
 	for i in rng.randi_range(1, 3):
 		var o := corner + Vector3(rng.randf_range(-0.12, 0.12), 0, rng.randf_range(-0.12, 0.12))
 		var m := M.part(t, M.sph(rng.randf_range(0.12, 0.22), 7), pm.moss, Vector3(o.x, top + 0.02, o.z), Vector3.ZERO, Vector3(1, 0.22, 1))
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if rng.randf() < 0.35:
+	if flora == "dry":
+		_tuft(t, Vector3(corner.x, top, corner.z), 0.6)
+	elif flora in ["reed", "jungle"] and rng.randf() < 0.5:
+		_reeds(t, Vector3(corner.x, top, corner.z), 0.6)
+	elif rng.randf() < 0.35:
 		_cap_cluster(t, Vector3(corner.x, top, corner.z) * Vector3(0.9, 1, 0.9))
+
+# Crystals or ice: a few leaning shards with a faint light in them.
+func _crystals(t: Node3D, o: Vector3, s: float) -> void:
+	var pm := _plants()
+	for i in rng.randi_range(2, 4):
+		var h := rng.randf_range(0.15, 0.4) * s * 2.0
+		var q := o + Vector3(rng.randf_range(-0.1, 0.1), 0, rng.randf_range(-0.1, 0.1))
+		M.part(t, M.cyl(0.0, rng.randf_range(0.04, 0.08) * s * 2.0, h, 5), pm.crystal, q + Vector3(0, h * 0.5, 0),
+			Vector3(rng.randf_range(-20, 20), rng.randf() * 90, rng.randf_range(-20, 20)))
+
+# A dry tuft: thin stalks fanned out.
+func _tuft(t: Node3D, o: Vector3, s: float) -> void:
+	var pm := _plants()
+	for i in rng.randi_range(5, 8):
+		var h := rng.randf_range(0.15, 0.3) * s * 2.0
+		var a := rng.randf() * TAU
+		var m := M.part(t, M.cyl(0.004, 0.012, h, 4), pm.fern, o + Vector3(cos(a) * 0.04, h * 0.45, sin(a) * 0.04),
+			Vector3(cos(a) * 25, 0, sin(a) * 25))
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+# Reeds: tall, thin, a few with a seed head.
+func _reeds(t: Node3D, o: Vector3, s: float) -> void:
+	var pm := _plants()
+	for i in rng.randi_range(4, 7):
+		var h := rng.randf_range(0.35, 0.7) * s * 2.0
+		var q := o + Vector3(rng.randf_range(-0.12, 0.12), 0, rng.randf_range(-0.12, 0.12))
+		var m := M.part(t, M.cyl(0.008, 0.018, h, 4), pm.fern, q + Vector3(0, h * 0.5, 0), Vector3(rng.randf_range(-10, 10), 0, rng.randf_range(-10, 10)))
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if rng.randf() < 0.4:
+			M.part(t, M.cyl(0.025, 0.025, 0.1, 6), pm.stalk, q + Vector3(0, h, 0))
 
 func _cap_cluster(t: Node3D, o: Vector3) -> void:
 	var pm := _plants()
@@ -375,7 +425,14 @@ func _rim() -> void:
 			at = Vector3(-hx, 0, hz - (d - 4 * hx - 2 * hz))
 		at += Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
 		var r := rng.randf()
-		if r < 0.55:
+		var flora: String = th.get("flora", "cave")
+		if flora in ["ice", "glass"] and r < 0.6:
+			_crystals(root, at, rng.randf_range(0.8, 1.4))
+		elif flora == "dry" and r < 0.6:
+			_tuft(root, at, rng.randf_range(0.8, 1.3))
+		elif flora in ["reed", "jungle"] and r < 0.4:
+			_reeds(root, at, rng.randf_range(0.9, 1.4))
+		elif r < 0.55:
 			_fern(root, at, rng.randf_range(0.7, 1.2))
 		elif r < 0.85:
 			M.part(root, M.sph(rng.randf_range(0.3, 0.5), 8), pm.moss, at, Vector3.ZERO, Vector3(1, 0.3, 1))
@@ -400,8 +457,7 @@ func _dress(t: Node3D, k: String, top: float, root_m: Material, egg_m: Array) ->
 					LOOK.paint_egg(e, egg_m)
 					t.add_child(e)
 			else:
-				for i in 2:
-					M.part(t, M.torus_mesh(0.4, 0.09), root_m, Vector3(rng.randf_range(-0.2, 0.2), top - 0.05, rng.randf_range(-0.25, 0.1)), Vector3(90, rng.randf_range(-40, 40) + i * 90, 0), Vector3(1, 1, 0.9))
+				_low_cover(t, top, root_m)
 		"r":
 			if nest:
 				var wm := M.web_mat(int(t.position.x * 7 + t.position.z * 13))
@@ -411,11 +467,15 @@ func _dress(t: Node3D, k: String, top: float, root_m: Material, egg_m: Array) ->
 				var wv := QuadMesh.new()
 				wv.size = Vector2(TS * 0.8, 0.5)
 				M.part(t, wv, wm, Vector3(0, top + 0.25, rng.randf_range(-0.3, 0.3)), Vector3(-20, rng.randf_range(-40, 40), 0))
+			var pc: Color = (th.wall[1] as Color).lightened(0.1)
 			for i in 5:
-				M.part(t, M.sph(rng.randf_range(0.05, 0.11), 6), M.mat(Color("6a6258"), 0.95),
+				M.part(t, M.sph(rng.randf_range(0.05, 0.11), 6), M.mat(pc, 0.95),
 					Vector3(rng.randf_range(-0.45, 0.45), top + 0.02, rng.randf_range(-0.45, 0.45)), Vector3.ZERO, Vector3(1, 0.6, 1))
 		"~":
-			var sm := M.mat(Color("3a3a2c"), 0.1, Color("6a7050"), 0.15, 0.8, 0.3)
+			# sinking ground: silk-mire, sand, peat or ink, by the dungeon
+			var mc: Color = {"sand": Color("a08058"), "noon": Color("8a7a5a"), "east": Color("4a4436"), "ink": Color("101018"),
+				"welling": Color("1e3a34"), "jungle": Color("3a3420"), "fen": Color("2a2a1c")}.get(board.get("theme", ""), Color("3a3a2c"))
+			var sm := M.mat(mc, 0.1 if board.get("theme", "") != "sand" else 0.9, mc.lightened(0.25), 0.15, 0.8, 0.3)
 			var q := PlaneMesh.new()
 			q.size = Vector2(TS * 0.92, TS * 0.92)
 			M.part(t, q, sm, Vector3(0, top + 0.03, 0))
@@ -431,6 +491,61 @@ func _dress(t: Node3D, k: String, top: float, root_m: Material, egg_m: Array) ->
 			l.omni_range = 2.0
 			l.position = Vector3(0, top + 0.4, 0)
 			t.add_child(l)
+
+# Low cover, as the dungeon has it: roots, a rock pile, crates, ice, crystal or a reed bank.
+func _low_cover(t: Node3D, top: float, root_m: Material) -> void:
+	match cover:
+		"rocks":
+			var m := _stone(th.wall[0], (th.wall[1] as Color).lightened(0.08), 0.35)
+			for i in 3:
+				var r := rng.randf_range(0.18, 0.3)
+				M.part(t, M.sph(r, 7), m, Vector3(rng.randf_range(-0.25, 0.25), top + r * 0.5, rng.randf_range(-0.25, 0.15)), Vector3(rng.randf() * 40, rng.randf() * 90, 0), Vector3(1.2, 0.8, 1))
+		"crates":
+			var wood := M.mat(Color("6a4a2c"), 0.85)
+			var band := M.mat(Color("3a3a3a"), 0.4, Color(0, 0, 0, 0), 1.0, 1.0, 0.6)
+			M.part(t, M.box(0.55, 0.5, 0.55), wood, Vector3(-0.15, top + 0.25, -0.1), Vector3(0, rng.randf_range(-15, 15), 0))
+			M.part(t, M.box(0.57, 0.06, 0.57), band, Vector3(-0.15, top + 0.4, -0.1), Vector3(0, rng.randf_range(-15, 15), 0))
+			M.part(t, M.cyl(0.18, 0.2, 0.45, 12), wood, Vector3(0.28, top + 0.22, 0.22))
+		"ice":
+			var im := M.mat(Color("c8e4f4"), 0.05, Color("80b8e0"), 0.3, 0.8, 0.3)
+			for i in 3:
+				var h := rng.randf_range(0.3, 0.6)
+				M.part(t, M.cyl(0.0, rng.randf_range(0.12, 0.2), h, 6), im, Vector3(rng.randf_range(-0.25, 0.25), top + h * 0.5, rng.randf_range(-0.25, 0.15)), Vector3(rng.randf_range(-15, 15), 0, rng.randf_range(-15, 15)))
+		"crystal":
+			_crystals(t, Vector3(0, top, 0), 1.2)
+			M.part(t, M.box(0.7, 0.35, 0.25), _stone(th.trim[0], th.trim[1], 0.4), Vector3(0, top + 0.17, -0.2))
+		"reeds":
+			M.part(t, M.sph(0.3, 8), _stone(th.wall[0], th.wall[1], 0.35), Vector3(-0.1, top + 0.1, -0.05), Vector3.ZERO, Vector3(1.3, 0.6, 1))
+			_reeds(t, Vector3(0.15, top, 0.1), 0.8)
+			_reeds(t, Vector3(-0.25, top, 0.2), 0.7)
+		_:
+			for i in 2:
+				M.part(t, M.torus_mesh(0.4, 0.09), root_m, Vector3(rng.randf_range(-0.2, 0.2), top - 0.05, rng.randf_range(-0.25, 0.1)), Vector3(90, rng.randf_range(-40, 40) + i * 90, 0), Vector3(1, 1, 0.9))
+
+# A dark room for the board to stand in: the dungeon's own light and a floor far below.
+func _void_stage() -> void:
+	world.clear_stage()
+	world.stage_name = "void"
+	world.set_light("torch", 0.01)
+	world.env.ambient_light_color = th.amb
+	world.env.ambient_light_energy = 0.7
+	world.env.fog_light_color = (th.amb as Color).darkened(0.6)
+	world.env.fog_density = 0.015
+	var base := M.mat((th.wall[1] as Color).darkened(0.7), 1.0)
+	M.part(world.stage, M.box(60, 0.2, 60), base, Vector3(0, -1.6, 0))
+	# a ring of rough stone round the table's edge, far enough off to frame it
+	var rk := _stone(th.wall[0], (th.wall[1] as Color).darkened(0.25), 0.3)
+	for i in 18:
+		var a := TAU * i / 18.0 + rng.randf() * 0.2
+		var r := rng.randf_range(13.0, 16.0)
+		var h := rng.randf_range(2.0, 6.0)
+		M.part(world.stage, M.sph(rng.randf_range(1.6, 2.8), 8), rk, Vector3(cos(a) * r, -1.5 + h * 0.3, sin(a) * r), Vector3(0, rng.randf() * 90, 0), Vector3(1, h / 2.5, 1))
+	var glow := OmniLight3D.new()
+	glow.light_color = th.light
+	glow.light_energy = 1.2
+	glow.omni_range = 18.0
+	glow.position = Vector3(0, 6, -4)
+	world.stage.add_child(glow)
 
 func _make_ov_mats() -> void:
 	var cols := {"move": Color(0.95, 0.78, 0.3, 0.5), "target": Color(1.0, 0.3, 0.25, 0.55), "ally": Color(0.4, 0.9, 0.5, 0.5),
@@ -468,11 +583,18 @@ func tile_pos(p: Vector2i) -> Vector3:
 
 # ---------------------------------------------------------------- the pieces
 func spawn(id: String, p: Vector2i) -> Dictionary:
-	var d: Dictionary = MAPS.UNITS[id]
+	var d: Dictionary = MAPS.unit(id)
 	var u := {"id": id, "name": d.name, "side": d.side, "kind": d.kind, "hp": d.hp, "max": d.hp, "hit": d.hit, "ac": d.ac,
 		"die": d.die, "spd": d.spd, "mv": d.mv, "cards": d.cards.duplicate(), "pos": p,
 		"face": Vector2i(0, 1) if d.side == "foe" else Vector2i(0, -1), "ct": float(rng.randi_range(1, 30)),
-		"res": 0, "used": {}, "stun": 0, "climb": d.get("climb", false), "alive": true, "moved": false, "acted": false, "mv0": []}
+		"res": 0, "used": {}, "stun": 0, "climb": d.get("climb", false) or d.get("fly", false),
+		"wade": d.get("wade", false) or d.get("fly", false), "alive": true, "moved": false, "acted": false, "mv0": []}
+	if tier > 0 and id in ["you", "burr"]:
+		# a dungeon further on: you've grown, as the 2D hero does with levels
+		u.max += tier * (2 if id == "you" else 1)
+		u.hp = u.max
+		u.hit += tier / 5
+		u.die = [u.die[0], u.die[1], u.die[2] + tier / 4]
 	if id == "you" and start_hp > 0:
 		u.hp = min(start_hp, u.max)
 	if id == "you":
@@ -573,8 +695,13 @@ func me():
 # two levels at once can't be climbed, and a drop of three can't be taken. Spiders climb anything.
 func cost(from: Vector2i, to: Vector2i, u = null) -> int:
 	var t = tile(to)
-	if t == null or t == "#" or t == "w":
+	if t == null or t == "#":
 		return 999
+	if t == "w":
+		# deep water: only swimmers and fliers go in it
+		if u == null or not u.get("wade", false):
+			return 999
+		return 1 if u.get("climb", false) else 2
 	var dl := level(to) - level(from)
 	var climber: bool = u != null and u.get("climb", false)
 	if not climber:
@@ -1227,7 +1354,10 @@ func _say(u: Dictionary, t: String, c := Color("e8e0c0")) -> void:
 	world.float_text(u.node.position + Vector3(0, 1.5, 0), t, c)
 
 var start_hp := 0
-var closeup := ""   # a piece's id: the camera stays close on it (for stills)
+var tier := 0       # how far into the journey: you and Burr grow with each dungeon
+var closeup := ""
+var th := {}        # the dungeon's theme: stone, plants, light
+var cover := ""     # how low cover looks here: eggs, roots, rocks, crates, ice, crystal, reeds   # a piece's id: the camera stays close on it (for stills)
 func _focus_on(p: Vector2i) -> void:
 	if closeup != "":
 		for u in units:

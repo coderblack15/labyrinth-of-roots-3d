@@ -7,7 +7,8 @@
 #   --shots=DIR       saves screenshots at the story's key moments
 #   --fast            no typewriter, short waits (for headless runs)
 #   --look            the painted diorama look (test)
-#   --explore=KEY     walk a dungeon (scripts/explore/dungeons.gd), its fights on the tactics board
+#   --explore=KEY     walk a dungeon (scripts/explore/dungeons.gd), its fights on the tactics board;
+#                     --explore=all walks all twenty in chapter order
 #   --battle=KEY      straight into a tactics battle (nest, gallery); with --autoplay both sides play themselves
 extends Node3D
 
@@ -19,6 +20,7 @@ var world
 var story
 var autoplay := false
 var fast := false
+var test_tier := 0   # --tier=N: a single battle as the Nth dungeon would play it
 var shots_dir := ""
 var shot_n := 0
 
@@ -32,6 +34,8 @@ func _ready() -> void:
 		elif a.begins_with("--seed="):
 			rng.seed = int(a.substr(7))
 			seeded = true
+		elif a.begins_with("--tier="):
+			test_tier = int(a.substr(7))
 		elif a.begins_with("--shots="):
 			shots_dir = a.substr(8)
 	if not seeded:
@@ -73,14 +77,14 @@ var battle
 # The tactics battle (scripts/tactics/): the painted look, the board, its screen.
 func _battle() -> void:
 	while true:
-		var r := await run_battle(battle_key, 0, "Fight again")
+		var r := await run_battle(battle_key, 0, "Fight again", test_tier)
 		if autoplay:
 			get_tree().quit()
 			return
 
 # One fight on the tactics board: build it, play it, show the result, clear it away.
 # hp: your HP going in (0 = full). Returns {"result", "hp"}.
-func run_battle(key: String, hp := 0, after := "Continue") -> Dictionary:
+func run_battle(key: String, hp := 0, after := "Continue", tier := 0) -> Dictionary:
 	battle = preload("res://scripts/tactics/battle.gd").new()
 	battle.name = "Battle"
 	battle.main = self
@@ -89,6 +93,7 @@ func run_battle(key: String, hp := 0, after := "Continue") -> Dictionary:
 	battle.auto = autoplay
 	battle.demo = "--demo" in OS.get_cmdline_user_args()
 	battle.start_hp = hp
+	battle.tier = tier
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--closeup="):
 			battle.closeup = a.substr(10)
@@ -128,14 +133,22 @@ func run_battle(key: String, hp := 0, after := "Continue") -> Dictionary:
 
 var explore
 func _explore(key: String) -> void:
-	explore = preload("res://scripts/explore/explore.gd").new()
-	explore.name = "Explore"
-	explore.main = self
-	explore.world = world
-	explore.auto = autoplay
-	add_child(explore)
-	var r: String = await explore.run(key)
-	print("== DUNGEON ", r)
+	# "all" walks every dungeon in chapter order, starting fresh in each
+	var keys: Array = preload("res://scripts/explore/dungeons.gd").ORDER if key == "all" else [key]
+	for k in keys:
+		explore = preload("res://scripts/explore/explore.gd").new()
+		explore.name = "Explore"
+		explore.main = self
+		explore.world = world
+		explore.auto = autoplay
+		add_child(explore)
+		var r: String = await explore.run(k)
+		print("== DUNGEON ", k, " ", r)
+		await get_tree().create_timer(2.5 if not fast else 0.3).timeout
+		if k != keys[-1]:
+			await ui.fade_out(0.8)
+		explore.queue_free()
+		await get_tree().process_frame
 	if autoplay:
 		await get_tree().create_timer(1.0).timeout
 		get_tree().quit()

@@ -9,6 +9,15 @@
 # for its place (in the nest, low cover is a clutch of egg sacs and rugged ground is web).
 extends RefCounted
 
+const GEN = preload("res://scripts/tactics/gen_boards.gd")
+
+# A board or a unit by key: the hand-made ones here first, then the dungeons' generated ones.
+static func board(key: String) -> Dictionary:
+	return BOARDS[key] if BOARDS.has(key) else GEN.BOARDS[key]
+
+static func unit(id: String) -> Dictionary:
+	return UNITS[id] if UNITS.has(id) else GEN.UNITS[id]
+
 const BOARDS := {
 	# The nest under the Hollow Chamber: Ryytaa the Ender and four of her brood. 14 x 9,
 	# wider than the 2D 7 x 6, so the fight has room and the ground is worth racing for.
@@ -103,6 +112,9 @@ const CARDS := {
 	"sling": {"name": "Sling", "min": 2, "max": 4, "ranged": true, "die": [1, 4, 1], "text": "A stone from range. Tall cover blocks it."},
 	"bite": {"name": "Bite", "min": 1, "max": 1, "melee": true, "text": "Teeth at the knee."},
 	"drag": {"name": "Drag Down", "cost": 1, "min": 1, "max": 1, "melee": true, "stun": true, "die": [1, 4, 0], "text": "It goes down and loses its next turn."},
+	"breath": {"name": "Furnace Breath", "min": 2, "max": 3, "ranged": true, "die": [1, 6, 0], "text": "A gout of kiln-heat. Tall cover blocks it."},
+	"lash": {"name": "Lash", "min": 2, "max": 2, "ranged": true, "die": [1, 4, 1], "text": "A whip of vine or chain from two squares off."},
+	"jolt": {"name": "Jolt", "min": 2, "max": 3, "ranged": true, "die": [1, 4, 1], "text": "A crack of brine-lightning through the air."},
 	"spray": {"name": "Venom Spray", "min": 2, "max": 3, "ranged": true, "die": [1, 6, 0], "text": "Venom from range. Tall cover blocks it."},
 }
 
