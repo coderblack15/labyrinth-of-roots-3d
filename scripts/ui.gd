@@ -502,6 +502,47 @@ func _lbl(parent: Control, text: String, size: int, col := C_TEXT) -> Label:
 	parent.add_child(l)
 	return l
 
+# The first screen: pick a dungeon (any of the twenty, or all in order) or the story slice.
+func start_menu() -> String:
+	await fade_in(0.8)
+	var t := _overlay()
+	_lbl(t.box, "LABYRINTH OF ROOTS", 30, C_GOLD)
+	_lbl(t.box, "The Dungeons, in 3D", 17, C_MECH)
+	_lbl(t.box, "Created by: Adrian Blackshire and Claude", 14, Color("b0a080"))
+	var pick := [""]
+	var all := _button("Play all twenty, in order")
+	all.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	all.pressed.connect(func(): pick[0] = "all")
+	t.box.add_child(all)
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(0, min(360.0, view.y - 330))
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	t.box.add_child(sc)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 6)
+	sc.add_child(list)
+	var DG = load("res://scripts/explore/dungeons.gd")
+	for i in DG.ORDER.size():
+		var k: String = DG.ORDER[i]
+		var dd: Dictionary = DG.DUNGEONS[k]
+		var b := _button("%d.  %s   ·   %s" % [i + 1, dd.title, dd.chapter], true)
+		b.custom_minimum_size = Vector2(0, 42)
+		b.pressed.connect(func(): pick[0] = k)
+		list.add_child(b)
+	var story_b := _button("The story slice (Parts I to IV)", true)
+	story_b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	story_b.pressed.connect(func(): pick[0] = "story")
+	t.box.add_child(story_b)
+	_lbl(t.box, "Walk: thumb stick, WASD or tap. Act: the button, E or Space. In a fight: tap a gold square to move, tap a foe twice to strike.", 13, Color("8a7a5a"))
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--pick="):
+			pick[0] = a.substr(7)
+	while pick[0] == "":
+		await get_tree().process_frame
+	t.o.queue_free()
+	return pick[0]
+
 func title_screen() -> Dictionary:
 	await fade_in(1.2)
 	# The warning, as the web game opens.

@@ -56,8 +56,12 @@ func run(k: String) -> String:
 	W = grid[0].length()
 	_hud()
 	_gear_up()
+	if _dbg("nohero"):
+		world.player.visible = false
 	build()
 	world.place_player(cell_pos(find("P")) + Vector3(0, 0.1, 0), 0)
+	if _dbg("count"):
+		_count()
 	await get_tree().process_frame
 	main.ui.fade_in(0.8)
 	banner(d.title, d.intro)
@@ -114,7 +118,7 @@ func build() -> void:
 	bodies = {}
 	standees = []
 	things = {}
-	lights_left = 10
+	lights_left = 6 if OS.has_feature("web") else 10
 	mats.floor = _stone(th.floor)
 	mats.wall = _stone(th.wall)
 	mats.trim = _stone(th.trim)
@@ -160,9 +164,48 @@ func build() -> void:
 				_lurkers(c, at)
 			if k != "#" and k != "," and rng.randf() < 0.35:
 				_overgrowth(at, 0.4)
+	_bake()
+
+func _dbg(k: String) -> bool:
+	return ("--dbg-" + k) in OS.get_cmdline_user_args()
+
+# Merge the loose dressing (roots, moss, ferns, fungus, rocks) into one mesh per material.
+# A maze makes a couple of thousand little pieces; as single meshes they swamp a phone or
+# a browser's WebGL, merged they're a few dozen draws.
+func _bake() -> void:
+	var groups := {}
+	for n in world.stage.get_children():
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null or mi.material_override == null or mi.get_child_count() > 0:
+			continue
+		if not groups.has(mi.material_override):
+			groups[mi.material_override] = []
+		groups[mi.material_override].append(mi)
+	for m in groups:
+		var list: Array = groups[m]
+		if list.size() < 3:
+			continue
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var shadow: int = list[0].cast_shadow
+		for mi in list:
+			for si in mi.mesh.get_surface_count():
+				st.append_from(mi.mesh, si, mi.transform)
+			world.stage.remove_child(mi)
+			mi.free()
+		var out := MeshInstance3D.new()
+		out.mesh = st.commit()
+		out.material_override = m
+		out.cast_shadow = shadow
+		world.stage.add_child(out)
+
+func _count() -> void:
+	print("meshes ", world.stage.find_children("*", "MeshInstance3D", true, false).size(), " lights ", world.stage.find_children("*", "Light3D", true, false).size())
 
 func _wall(c: Vector2i, at: Vector3) -> void:
 	var b: Node3D = world.solid(Vector3(CS, WH, CS), at + Vector3(0, WH * 0.5, 0), mats.wall)
+	if _dbg("bare"):
+		return
 	# dress only the faces that show on the floor side
 	for dd in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
 		var n: Vector2i = c + dd
@@ -175,13 +218,17 @@ func _wall(c: Vector2i, at: Vector3) -> void:
 			var o := along * rng.randf_range(-1.6, 1.6)
 			var top := face + o + Vector3(0, WH, 0)
 			var bot := face + o + Vector3(dd.x, 0, dd.y) * rng.randf_range(0.05, 0.3) + Vector3(0, rng.randf_range(0.0, 1.6), 0)
-			M.limb(world.stage, top, bot, rng.randf_range(0.04, 0.09), mats.trim)
+			if not _dbg("noroots"):
+				M.limb(world.stage, top, bot, rng.randf_range(0.04, 0.09), mats.trim)
 		# moss along the foot of the wall
 		for i in rng.randi_range(1, 3):
-			_moss(face + along * rng.randf_range(-1.6, 1.6), rng.randf_range(0.25, 0.45))
-		if th.webs and rng.randf() < 0.18:
+			if not _dbg("nomoss"):
+				_moss(face + along * rng.randf_range(-1.6, 1.6), rng.randf_range(0.25, 0.45))
+		if th.webs and rng.randf() < 0.18 and not _dbg("noweb"):
 			world.web(face + along * rng.randf_range(-1.2, 1.2) + Vector3(dd.x, 0, dd.y) * 0.3 + Vector3(0, WH - 0.9, 0), 1.6, 1.4, Vector3(0, rad_to_deg(atan2(float(dd.y), float(dd.x))) + 90, 0), rng.randi())
 	# the top: dark earth with a tangle of roots and moss, so the paths read as cut through it
+	if _dbg("notop"):
+		return
 	M.part(world.stage, M.box(CS + 0.02, 0.12, CS + 0.02), mats.earth, at + Vector3(0, WH + 0.06, 0))
 	for i in rng.randi_range(2, 4):
 		var a := Vector3(rng.randf_range(-1.8, 1.8), WH + 0.12, rng.randf_range(-1.8, 1.8))
@@ -192,6 +239,8 @@ func _wall(c: Vector2i, at: Vector3) -> void:
 
 # Ferns, moss and pale glowing fungus.
 func _overgrowth(at: Vector3, amount: float) -> void:
+	if _dbg("noflora"):
+		return
 	var n := int(round(rng.randf_range(2, 6) * amount))
 	for i in n:
 		var p := at + Vector3(rng.randf_range(-1.6, 1.6), 0, rng.randf_range(-1.6, 1.6))

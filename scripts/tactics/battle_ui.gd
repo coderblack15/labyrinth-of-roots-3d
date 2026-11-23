@@ -218,13 +218,14 @@ func panel(u, b) -> void:
 		stat_lbl.text = ""
 		return
 	who_lbl.text = u.name
-	var res: String = "◆".repeat(u.res) + "◇".repeat(3 - u.res)
-	stat_lbl.text = "  HP %d/%d · AC %d · [color=#f3d27a]%s[/color]%s" % [u.hp, u.max, u.ac, res, "" if not u.moved else " · moved"]
+	# ◆ Resonance as gold dots (the web build's font has no ◆)
+	var res: String = "[color=#f3d27a]%s[/color][color=#5a4a30]%s[/color]" % ["•".repeat(u.res), "•".repeat(3 - u.res)]
+	stat_lbl.text = "  HP %d/%d · AC %d · Res %s%s" % [u.hp, u.max, u.ac, res, "" if not u.moved else " · moved"]
 	for k in u.cards:
 		var c: Dictionary = MAPS.CARDS[k]
 		var btn := Button.new()
 		var cost: int = c.get("cost", 0)
-		btn.text = c.name + ("" if cost == 0 else " " + "◆".repeat(cost))
+		btn.text = c.name + ("" if cost == 0 else " " + "•".repeat(cost))
 		btn.toggle_mode = true
 		btn.button_pressed = b.sel_card == k
 		btn.disabled = u.acted or not b.card_ok(u, k)

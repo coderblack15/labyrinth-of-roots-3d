@@ -20,6 +20,9 @@ static func rock(base: Color, disp := 0.25, moss := 0.5, strata := 0.5, scale :=
 
 # Screen filter, under the story UI (which sits on layer 5).
 static func add_filter(host: Node) -> void:
+	# the browser's WebGL can't read the screen back for this filter, so the web build goes without it
+	if OS.has_feature("web"):
+		return
 	var cl := CanvasLayer.new()
 	cl.layer = 1
 	var r := ColorRect.new()

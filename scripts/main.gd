@@ -43,7 +43,7 @@ func _ready() -> void:
 	world = preload("res://scripts/world.gd").new()
 	world.name = "World"
 	world.main = self
-	world.look = "--look" in OS.get_cmdline_user_args() or Array(OS.get_cmdline_user_args()).any(func(a): return a.begins_with("--battle=") or a.begins_with("--explore="))
+	world.look = true  # the painted look, everywhere (it was --look while on trial)
 	add_child(world)
 	ui = preload("res://scripts/ui.gd").new()
 	ui.name = "UI"
@@ -69,7 +69,12 @@ func _ready() -> void:
 	elif battle_key != "":
 		await _battle()
 	else:
-		story.run()
+		var pick: String = await ui.start_menu()
+		if pick == "story":
+			story.run()
+		else:
+			await _explore(pick)
+			get_tree().reload_current_scene()
 
 var battle_key := ""
 var battle

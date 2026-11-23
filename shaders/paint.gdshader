@@ -2,7 +2,7 @@
 // brush-like patches, then ink edges, a colour grade, canvas grain and a vignette.
 shader_type canvas_item;
 
-uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D screen : hint_screen_texture, filter_linear;
 uniform int radius = 2;
 uniform float ink = 0.25;
 uniform float grain = 0.03;

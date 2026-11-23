@@ -69,7 +69,7 @@ func _ready() -> void:
 		rim.light_energy = 0.0
 		rim.shadow_enabled = false
 		add_child(rim)
-		env.glow_enabled = true
+		env.glow_enabled = not OS.has_feature("web")
 		env.glow_hdr_threshold = 0.85
 		env.glow_intensity = 0.9
 		env.glow_bloom = 0.15
