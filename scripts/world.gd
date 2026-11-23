@@ -389,14 +389,14 @@ func set_light(mode: String, t := 1.2) -> void:
 			amb_e = 0.5
 			fog_d = 0.02
 	if look:
-		sun.rotation_degrees = Vector3(-16, 55, 0)
+		sun.rotation_degrees = Vector3(-22, -50, 0)
 		if mode == "dusk":
 			# the painting's weather: grey cloud and mist, a low warm sun
 			sky_top = Color("2e3038")
 			sky_hor = Color("8a8a90")
-			gnd = Color("2a2826")
+			gnd = Color("70727c")
 			amb = Color("8a8c98")
-			amb_e = 0.5
+			amb_e = 0.85
 			sun_e = 1.6
 			fog_c = Color("70727c")
 			fog_d = 0.006

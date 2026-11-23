@@ -4,7 +4,7 @@ shader_type canvas_item;
 
 uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
 uniform int radius = 2;
-uniform float ink = 0.35;
+uniform float ink = 0.25;
 uniform float grain = 0.03;
 uniform vec3 shadow_tint : source_color = vec3(0.16, 0.14, 0.22);
 uniform vec3 light_tint : source_color = vec3(1.0, 0.92, 0.80);
@@ -42,7 +42,7 @@ void fragment() {
 	// ink: darken strong luminance edges
 	float lx = lum(texture(screen, uv + vec2(px.x * 2.0, 0.0)).rgb) - lum(texture(screen, uv - vec2(px.x * 2.0, 0.0)).rgb);
 	float ly = lum(texture(screen, uv + vec2(0.0, px.y * 2.0)).rgb) - lum(texture(screen, uv - vec2(0.0, px.y * 2.0)).rgb);
-	float e = smoothstep(0.06, 0.25, sqrt(lx * lx + ly * ly));
+	float e = smoothstep(0.12, 0.35, sqrt(lx * lx + ly * ly));
 	col *= 1.0 - e * ink * 0.6;
 
 	// grade: tinted shadows, warm lights, a touch more contrast

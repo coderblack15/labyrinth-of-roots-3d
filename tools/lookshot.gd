@@ -26,6 +26,9 @@ func _init() -> void:
 	world.place_player(Vector3(0, 0.1, -4.0), 0)
 	await _settle(world)
 	_save(out + "-pathway.png")
+	if "--pathway" in ua:
+		quit()
+		return
 	world.build("nest")
 	world.set_light("torch", 0.01)
 	world._hold("hand_r", load("res://scripts/models.gd").axe(), Vector3(0, -0.1, 0), Vector3(-50, 0, 0))

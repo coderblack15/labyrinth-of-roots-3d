@@ -6,6 +6,7 @@
 #   --seed=N          fixes the dice
 #   --shots=DIR       saves screenshots at the story's key moments
 #   --fast            no typewriter, short waits (for headless runs)
+#   --look            the painted diorama look (test)
 extends Node3D
 
 signal advance(how)
@@ -36,6 +37,7 @@ func _ready() -> void:
 	world = preload("res://scripts/world.gd").new()
 	world.name = "World"
 	world.main = self
+	world.look = "--look" in OS.get_cmdline_user_args()
 	add_child(world)
 	ui = preload("res://scripts/ui.gd").new()
 	ui.name = "UI"

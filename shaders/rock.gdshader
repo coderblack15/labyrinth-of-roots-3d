@@ -1,7 +1,7 @@
 // Painted-stone surface for the look pass: world-space noise bends the blocky
 // meshes into rock, adds strata, grime at the foot and moss on top faces.
 shader_type spatial;
-render_mode world_vertex_coords, diffuse_burley;
+render_mode world_vertex_coords, diffuse_burley, cull_disabled;
 
 uniform vec3 base_col : source_color = vec3(0.36, 0.35, 0.33);
 uniform vec3 dark_col : source_color = vec3(0.10, 0.09, 0.09);
@@ -13,6 +13,11 @@ uniform float strata = 0.5;
 uniform float bump = 0.6;
 uniform float grime = 1.0;
 uniform float streaks = 0.0;
+// a painted texture from Adrian's image tool, laid on from three sides
+uniform sampler2D tex : source_color, repeat_enable, filter_linear_mipmap;
+uniform float use_tex = 0.0;
+uniform float tex_scale = 0.22;
+uniform vec3 tex_tint : source_color = vec3(1.0);
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -68,12 +73,18 @@ void fragment() {
 	NORMAL = normalize(abs(det) * NORMAL - bump * grad);
 
 	float band = 0.5 + 0.5 * sin(p.y * 3.1 + fbm(p * 0.7) * 6.0);
-	vec3 c = mix(dark_col, base_col, smoothstep(0.15, 0.85, h));
+	vec3 c = mix(dark_col, base_col, smoothstep(0.1, 0.9, h));
 	c *= mix(1.0, 0.75 + 0.5 * band, strata);
 	float foot = smoothstep(0.0, 1.6, p.y);
 	c *= mix(1.0, mix(0.45, 1.0, foot), grime);
 	float m = smoothstep(0.35, 0.9, wnrm.y) * smoothstep(0.45, 0.6, fbm(p * 1.3)) * moss;
 	c = mix(c, moss_col * (0.7 + 0.6 * h), m);
+	if (use_tex > 0.0) {
+		vec3 w = pow(abs(wnrm), vec3(4.0));
+		w /= (w.x + w.y + w.z);
+		vec3 t = texture(tex, p.zy * tex_scale).rgb * w.x + texture(tex, p.xz * tex_scale).rgb * w.y + texture(tex, p.xy * tex_scale).rgb * w.z;
+		c = mix(c, t * tex_tint * mix(0.6, 1.0, foot), use_tex);
+	}
 	ALBEDO = c;
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.25;

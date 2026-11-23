@@ -9,7 +9,7 @@ static func rock(base: Color, disp := 0.25, moss := 0.5, strata := 0.5, scale :=
 	var m := ShaderMaterial.new()
 	m.shader = ROCK
 	m.set_shader_parameter("base_col", base)
-	m.set_shader_parameter("dark_col", base.darkened(0.35))
+	m.set_shader_parameter("dark_col", base.darkened(0.3))
 	m.set_shader_parameter("disp", disp)
 	m.set_shader_parameter("moss", moss)
 	m.set_shader_parameter("strata", strata)
@@ -66,31 +66,84 @@ static func dress(world, name: String) -> void:
 		if name == "pathway":
 			base = c.lerp(Color("6e6862"), 0.6)
 		mi.material_override = rock(base, disp, 0.6 if name == "pathway" else 0.15, 0.0 if flat else 0.5)
+	var set_path := "res://models/set_%s.glb" % name
+	if ResourceLoader.exists(set_path):
+		_diorama(world, set_path)
 	match name:
 		"pathway":
 			_pathway(world)
 		"nest":
 			_nest(world)
 
+# Surfaces of a sculpted set, by material name: [colour, moss, strata, streaks].
+const SURF := {
+	"cliff": [Color("66625c"), 0.35, 0.2, 0.3],
+	"gatestone": [Color("62605a"), 0.3, 0.3, 0.25],
+	"ground": [Color("4a4436"), 0.9, 0.0, 0.0],
+	"flag": [Color("5c574f"), 0.35, 0.0, 0.0],
+	"rock": [Color("625e58"), 0.45, 0.0, 0.0],
+	"root": [Color("54463a"), 0.15, 0.0, 0.85],
+}
+
+# A Blender-sculpted set replaces the stage's blocks; the blocks stay for walking into.
+static func _diorama(world, path: String) -> void:
+	for n in world.stage.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh is PrimitiveMesh:
+			var sm = mi.material_override
+			var dark: bool = sm is StandardMaterial3D and sm.albedo_color.get_luminance() < 0.04
+			if not dark:
+				mi.visible = false
+	var set_node: Node3D = M.glb(path.get_file().get_basename())
+	world.stage.add_child(set_node)
+	world.props.diorama = true
+	for n in set_node.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(i)
+			var key := src.resource_name if src else ""
+			var spec: Array = SURF.get(key, [Color("5a5650"), 0.3, 0.3, 0.0])
+			var m := rock(spec[0], 0.0, spec[1], spec[2])
+			m.set_shader_parameter("streaks", spec[3])
+			m.set_shader_parameter("grime", 0.0 if key in ["ground", "flag"] else 0.8)
+			var tp := "res://art/tex_%s.webp" % key
+			if ResourceLoader.exists(tp):
+				m.set_shader_parameter("tex", load(tp))
+				m.set_shader_parameter("use_tex", 1.0)
+			mi.set_surface_override_material(i, m)
+
 static func _pathway(world) -> void:
 	# the painting, far off behind the gate
 	var q := QuadMesh.new()
-	q.size = Vector2(260, 120)
+	q.size = Vector2(360, 220)
 	var bm := ShaderMaterial.new()
 	bm.shader = preload("res://shaders/backdrop.gdshader")
 	bm.set_shader_parameter("tex", load("res://art/sc_pathway.webp"))
 	bm.set_shader_parameter("bright", 0.95)
-	var bd := M.part(world.stage, q, bm, Vector3(0, 38, -120))
+	bm.set_shader_parameter("crop", 0.3)
+	bm.set_shader_parameter("bottom", 0.95)
+	var bd := M.part(world.stage, q, bm, Vector3(-20, 10, -120))
 	bd.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	if world.props.get("diorama", false):
+		# the dark inside the doorway's arch
+		M.part(world.stage, M.box(4.0, 4.0, 0.3), M.mat(Color("050404")), Vector3(0, 6.5, -32.6))
+		_lantern(world)
+		_dust(world.stage, Vector3(0, 2, -20), Vector3(5, 2.5, 10), Color(1.0, 0.85, 0.7, 0.35))
+		return
 	# roots poured over the gate, around the doorway
 	var bark := rock(Color("4a3c2e"), 0.0, 0.0, 0.0)
 	bark.set_shader_parameter("streaks", 0.8)
 	bark.set_shader_parameter("grime", 0.0)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
 	for i in 26:
 		var x := rng.randf_range(-7.0, 7.0)
 		_root(world.stage, Vector3(x, 9.6, -31.1), 0.2 * rng.randf_range(0.7, 1.2), rng, bark, 0)
+	_lantern(world)
+	_tufts(world, rng)
+	_dust(world.stage, Vector3(0, 2, -14), Vector3(5, 2.5, 18), Color(1.0, 0.85, 0.7, 0.35))
+
+static func _lantern(world) -> void:
 	# a lantern hung in the doorway, like the painting
 	var lan := Node3D.new()
 	lan.position = Vector3(0, 4.4, -31.7)
@@ -102,6 +155,8 @@ static func _pathway(world) -> void:
 	ll.light_energy = 2.4
 	ll.omni_range = 9.0
 	lan.add_child(ll)
+
+static func _tufts(world, rng: RandomNumberGenerator) -> void:
 	# tufts along the verges
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -121,7 +176,6 @@ static func _pathway(world) -> void:
 	mmi.multimesh = mm
 	mmi.material_override = tm
 	world.stage.add_child(mmi)
-	_dust(world.stage, Vector3(0, 2, -14), Vector3(5, 2.5, 18), Color(1.0, 0.85, 0.7, 0.35))
 
 static func _root(parent: Node3D, p: Vector3, r: float, rng: RandomNumberGenerator, m: Material, depth: int) -> void:
 	var dir := Vector3(rng.randf_range(-0.3, 0.3), -1, 0).normalized()
