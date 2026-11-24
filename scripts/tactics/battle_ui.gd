@@ -283,8 +283,8 @@ func result(r: String, b, after := "Fight again") -> void:
 		c.queue_free()
 	var good := r == "victory"
 	banner("Victory" if good else ("Burr drags you clear" if r == "dragged out" else "The fight stalls"),
-		("Ryytaa is down and the brood breaks." if "ryytaa" in b.board.get("captains", []) else "The brood is beaten.") if good else "Vaelric's axe holds you at 1 HP. Try the ground another way.")
-	info("[b]%s[/b]" % ("The nest is yours." if good else "You're out of the fight, but not out of the labyrinth."))
+		("Ryytaa is down and the brood breaks." if "ryytaa" in b.board.get("captains", []) else "The board is yours.") if good else "Vaelric's axe holds you at 1 HP. Try the ground another way.")
+	info("[b]%s[/b]" % (("The nest is yours." if "ryytaa" in b.board.get("captains", []) else "They're beaten.") if good else "You're out of the fight, but not out of the labyrinth."))
 	var again := Button.new()
 	again.text = after
 	again.custom_minimum_size = Vector2(0, 44)

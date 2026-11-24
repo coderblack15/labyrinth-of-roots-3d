@@ -7,8 +7,8 @@
 #   --shots=DIR       saves screenshots at the story's key moments
 #   --fast            no typewriter, short waits (for headless runs)
 #   --look            the painted diorama look (test)
-#   --explore=KEY     walk a dungeon (scripts/explore/dungeons.gd), its fights on the tactics board;
-#                     --explore=all walks all twenty in chapter order
+#   --explore=KEY     play a dungeon's fight boards in order (scripts/tactics/campaign.gd);
+#                     --explore=all plays all twenty in chapter order
 #   --battle=KEY      straight into a tactics battle (nest, gallery); with --autoplay both sides play themselves
 extends Node3D
 
@@ -64,7 +64,10 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--explore="):
 			dungeon = a.substr(10)
-	if dungeon != "":
+	var q := _query()
+	if q.has("d"):
+		await _from_2d(q)
+	elif dungeon != "":
 		await _explore(dungeon)
 	elif battle_key != "":
 		await _battle()
@@ -136,23 +139,66 @@ func run_battle(key: String, hp := 0, after := "Continue", tier := 0) -> Diction
 	world.cam_fixed = false
 	return {"result": r, "hp": left}
 
-var explore
+# The 2D game can send one of its fights here: it opens this page in a frame with
+# ?d=DUNGEON&f=N&hpf=0.73&pr=she (f: which fight board, "boss" for the boss board; hpf: your HP
+# as a share of your most). When it's over, the result goes back to the 2D game by postMessage.
+func _query() -> Dictionary:
+	var q := {}
+	var src := ""
+	if OS.has_feature("web"):
+		var v = JavaScriptBridge.eval("window.location.search", true)
+		if v is String:
+			src = v
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--from2d="):
+			src = a.substr(9)
+	for pair in src.trim_prefix("?").split("&", false):
+		var kv: PackedStringArray = pair.split("=")
+		if kv.size() == 2:
+			q[kv[0].uri_decode()] = kv[1].uri_decode()
+	return q
+
+func _from_2d(q: Dictionary) -> void:
+	var DG = preload("res://scripts/explore/dungeons.gd")
+	var key: String = q.d if DG.DUNGEONS.has(q.d) else "roots"
+	var dd: Dictionary = DG.DUNGEONS[key]
+	var boards := []
+	var digits: Array = dd.get("fights", {}).keys()
+	digits.sort()
+	for dg in digits:
+		boards.append(dd.fights[dg])
+	var board: String = dd.boss
+	if q.get("f", "") != "boss" and boards.size() > 0:
+		board = boards[clampi(int(q.get("f", "0")), 0, boards.size() - 1)]
+	if q.has("pr"):
+		story.S["pr"] = q.pr
+	if q.get("auto", "") == "1":
+		autoplay = true  # for the 2D game's tests
+	var tier: int = max(0, DG.ORDER.find(key))
+	var mx: int = 24 + tier * 2
+	var hp: int = clampi(int(round(float(q.get("hpf", "1")) * mx)), 1, mx)
+	world.player.visible = false
+	var res: Dictionary = await run_battle(board, hp, "Back to the story", tier)
+	var hpf: float = float(res.hp) / float(mx)
+	print("[from2d] ", res.result, " ", hpf)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.parent.postMessage({lor3d: 1, result: '%s', hpf: %f}, '*')" % [res.result, hpf], true)
+	if autoplay and not OS.has_feature("web"):
+		get_tree().quit()
+
+# A dungeon is its run of tactics boards (scripts/tactics/campaign.gd).
+# "all" plays every dungeon in chapter order, starting fresh in each.
 func _explore(key: String) -> void:
-	# "all" walks every dungeon in chapter order, starting fresh in each
 	var keys: Array = preload("res://scripts/explore/dungeons.gd").ORDER if key == "all" else [key]
 	for k in keys:
-		explore = preload("res://scripts/explore/explore.gd").new()
-		explore.name = "Explore"
-		explore.main = self
-		explore.world = world
-		explore.auto = autoplay
-		add_child(explore)
-		var r: String = await explore.run(k)
+		var c = preload("res://scripts/tactics/campaign.gd").new()
+		c.name = "Campaign"
+		c.main = self
+		c.auto = autoplay
+		add_child(c)
+		var r: String = await c.run(k)
 		print("== DUNGEON ", k, " ", r)
-		await get_tree().create_timer(2.5 if not fast else 0.3).timeout
-		if k != keys[-1]:
-			await ui.fade_out(0.8)
-		explore.queue_free()
+		c.queue_free()
 		await get_tree().process_frame
 	if autoplay:
 		await get_tree().create_timer(1.0).timeout

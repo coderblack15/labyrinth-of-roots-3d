@@ -466,3 +466,26 @@ static func torus_mesh(r: float, t: float) -> TorusMesh:
 	m.rings = 20
 	m.ring_segments = 8
 	return m
+
+# A turned chess-piece body for the painted emblems: foot, bead, tapered stem,
+# collar and cup, ivory for your side and ebony for the foe's, with brass trim.
+# r is the foot's radius; returns the height of the cup's top.
+static func chess_body(parent: Node3D, r: float, ours: bool, tall := 1.0) -> float:
+	var wood := mat(Color("e6dcc2") if ours else Color("231a16"), 0.32 if ours else 0.28)
+	var brass := mat(Color("a8833f"), 0.3, Color(0, 0, 0, 0), 1.0, 1.0, 0.8)
+	var y := 0.0
+	part(parent, cyl(r, r + 0.03, 0.07, 32), brass, Vector3(0, 0.035, 0))
+	y = 0.07
+	part(parent, cyl(r * 0.8, r * 0.92, 0.07, 32), wood, Vector3(0, y + 0.035, 0))
+	y += 0.07
+	part(parent, torus_mesh(r * 0.66, 0.035), wood, Vector3(0, y + 0.01, 0))
+	y += 0.03
+	var sh := 0.26 * tall
+	part(parent, cyl(r * 0.3, r * 0.56, sh, 28), wood, Vector3(0, y + sh * 0.5, 0))
+	y += sh
+	part(parent, torus_mesh(r * 0.36, 0.028), brass, Vector3(0, y, 0))
+	part(parent, cyl(r * 0.5, r * 0.4, 0.04, 28), wood, Vector3(0, y + 0.02, 0))
+	y += 0.04
+	part(parent, cyl(r * 0.26, r * 0.34, 0.07, 24), wood, Vector3(0, y + 0.035, 0))
+	y += 0.07
+	return y

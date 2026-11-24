@@ -507,7 +507,7 @@ func start_menu() -> String:
 	await fade_in(0.8)
 	var t := _overlay()
 	_lbl(t.box, "LABYRINTH OF ROOTS", 30, C_GOLD)
-	_lbl(t.box, "The Dungeons, in 3D", 17, C_MECH)
+	_lbl(t.box, "Tactics in the Dungeons, in 3D", 17, C_MECH)
 	_lbl(t.box, "Created by: Adrian Blackshire and Claude", 14, Color("b0a080"))
 	var pick := [""]
 	var all := _button("Play all twenty, in order")
@@ -530,11 +530,7 @@ func start_menu() -> String:
 		b.custom_minimum_size = Vector2(0, 42)
 		b.pressed.connect(func(): pick[0] = k)
 		list.add_child(b)
-	var story_b := _button("The story slice (Parts I to IV)", true)
-	story_b.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	story_b.pressed.connect(func(): pick[0] = "story")
-	t.box.add_child(story_b)
-	_lbl(t.box, "Walk: thumb stick, WASD or tap. Act: the button, E or Space. In a fight: tap a gold square to move, tap a foe twice to strike.", 13, Color("8a7a5a"))
+	_lbl(t.box, "Each dungeon is a run of tactics fights, then its boss. Tap a gold square to move, tap a foe twice to strike.", 13, Color("8a7a5a"))
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--pick="):
 			pick[0] = a.substr(7)

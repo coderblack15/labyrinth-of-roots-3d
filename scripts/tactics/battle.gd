@@ -3,7 +3,7 @@
 # then faces a way. d20 + hit against AC; from the side +2, from behind +4. The ground
 # counts (scripts/tactics/maps.gd, GROUND). ◆ Resonance grows 1 a turn, 3 at most, and
 # pays for the big cards. Drop the captain and the rest break.
-# The pieces are the 2D game's painted minis, standing on brass bases.
+# The pieces are chess pieces crowned with the 2D game's painted emblems.
 # Created by: Adrian Blackshire and Claude.
 extends Node3D
 
@@ -607,10 +607,9 @@ func spawn(id: String, p: Vector2i) -> Dictionary:
 	var big: bool = d.get("big", false)
 	var small: bool = d.get("small", false)
 	var r := 0.46 if big else (0.36 if small else 0.4)
-	# the brass base, as on the 2D mat
+	# a turned chess piece (ivory for your side, ebony for theirs), crowned with the 2D emblem
 	var brass := M.mat(Color("8a6d3e"), 0.35, Color(0, 0, 0, 0), 1.0, 1.0, 0.7)
-	M.part(n, M.cyl(r, r + 0.03, 0.07, 28), brass, Vector3(0, 0.035, 0))
-	M.part(n, M.cyl(r - 0.03, r - 0.03, 0.01, 28), M.mat(Color("2a2018"), 0.9), Vector3(0, 0.075, 0))
+	var top := M.chess_body(n, r, u.side == "you", 1.15 if big else (0.8 if small else 1.0))
 	# a facing arrow on the base: gold for yours, red for theirs (the 2D map's pointer)
 	var arrow := MeshInstance3D.new()
 	var pm := PrismMesh.new()
@@ -618,14 +617,11 @@ func spawn(id: String, p: Vector2i) -> Dictionary:
 	arrow.mesh = pm
 	arrow.material_override = M.glow(Color("f3d27a") if u.side == "you" else Color("e0573f"), 1.6)
 	arrow.rotation_degrees = Vector3(-90, 0, 0)
-	arrow.position = Vector3(0, 0.09, -(r - 0.02))
+	arrow.position = Vector3(0, 0.075, -(r + 0.01))
 	n.add_child(arrow)
-	# the standee: a post and the round painted piece on top
-	var post_h := 0.3 if not big else 0.36
-	M.part(n, M.box(0.05, post_h, 0.03), brass, Vector3(0, 0.07 + post_h * 0.5, 0))
 	var piv := Node3D.new()
-	var disc := (1.7 if big else (1.2 if small else 1.35))
-	piv.position = Vector3(0, 0.07 + post_h + disc * 0.5 - 0.04, 0)
+	var disc := (1.5 if big else (1.05 if small else 1.2))
+	piv.position = Vector3(0, top + disc * 0.5 - 0.06, 0)
 	n.add_child(piv)
 	var q := MeshInstance3D.new()
 	var qm := QuadMesh.new()
