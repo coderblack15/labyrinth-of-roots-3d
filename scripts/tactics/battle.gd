@@ -45,6 +45,10 @@ var log_lines := []
 var cam_turn := 0
 var cam_yaw := 0.0
 var cam_zoom := 1.0
+var cam_spin := 0.0          # fx: the boss sweep turns the camera once round the table
+var shake_off := Vector3.ZERO # fx: the table jolts on a heavy blow
+var fx                         # scripts/tactics/fx.gd: weather, sound, weighty pieces, the cinematic camera
+var last_from := Vector2i.ZERO # where the last blow came from, so a piece rocks and falls away from it
 var cam_pan := Vector3.ZERO
 var cam_focus := Vector3.ZERO
 var drag_from := Vector2.ZERO
@@ -201,6 +205,9 @@ func build() -> void:
 	fill.light_energy = 0.35
 	fill.rotation_degrees = Vector3(-60, 150, 0)
 	root.add_child(fill)
+	fx = preload("res://scripts/tactics/fx.gd").new()
+	root.add_child(fx)
+	fx.setup(self)
 	cam_focus = Vector3.ZERO
 	if closeup != "":
 		_focus_on(Vector2i.ZERO)
@@ -868,6 +875,8 @@ func run() -> String:
 	for u in units:
 		_hp_show(u)
 	ui.banner(board.title, board.blurb)
+	if not board.get("captains", []).is_empty() or String(board.get("key", "")).ends_with("boss"):
+		await fx.sweep()
 	await wait(2.2 if not fast else 0.4)
 	while not over:
 		var u = next_actor()
@@ -1072,6 +1081,7 @@ func move_along(u: Dictionary, path: Array) -> void:
 		else:
 			tw.tween_property(u.node, "position", tile_pos(b), tt)
 		await tw.finished
+		fx.step(u, b)
 	u.pos = path[-1]
 	u.moved = true
 	_log("%s to %s" % [_verb(u, "move"), u.pos])
@@ -1131,6 +1141,7 @@ func hit(a: Dictionary, t: Dictionary, c: Dictionary) -> void:
 		_say(a, "charge!", Color("f3d27a"))
 		_log(_verb(a, "charge") + "!")
 	_log("%s %s for %d (d20 %d)" % [_verb(a, "crit" if crit else "hit"), t.name, dmg, r])
+	last_from = a.pos
 	await hurt(t, dmg, crit)
 	if c.get("stun", false) and t.alive:
 		t.stun = 1
@@ -1185,6 +1196,7 @@ func hurt(u: Dictionary, d: int, crit := false) -> void:
 	if u.hp <= 0:
 		await down(u)
 	else:
+		fx.struck(u, last_from, d, crit)
 		await wait(0.35)
 
 func down(u: Dictionary) -> void:
@@ -1199,12 +1211,12 @@ func down(u: Dictionary) -> void:
 		msg = "%s is out of the fight" % u.name
 	_log(msg)
 	_say(u, msg, Color("e0d0b0"))
-	# fall flat, like the 2D minis
-	var tw := create_tween()
-	tw.tween_property(u.card, "rotation:x", -0.85, 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(u.piv, "position:y", 0.12, 0.45)
-	await tw.finished
-	await wait(0.3)
+	# the chess piece topples over, away from the blow
+	fx.toppled(u, last_from)
+	var caps: Array = board.get("captains", [])
+	if u.side == "foe" and (living("foe").is_empty() or u.id in caps):
+		await fx.final_blow(u.node.position)
+	await wait(0.75)
 
 func check_end() -> void:
 	if over:
@@ -1371,8 +1383,8 @@ func _place_cam(snap := false) -> void:
 	var d := (19.0 if portrait else 14.0) * cam_zoom
 	var pitch := deg_to_rad(52.0)
 	var off := Vector3(0, sin(pitch), cos(pitch)) * d
-	off = off.rotated(Vector3.UP, cam_yaw)
-	var look := cam_focus + cam_pan + Vector3(0, 0.3, 0.6)
+	off = off.rotated(Vector3.UP, cam_yaw + cam_spin)
+	var look := cam_focus + cam_pan + shake_off + Vector3(0, 0.3, 0.6)
 	world.cam_fixed_pos = look + off
 	world.cam_fixed_look = look
 	world.cam_yaw = cam_yaw
@@ -1485,6 +1497,10 @@ func pick(sp: Vector2):
 				bt = t
 				best = p
 	return best
+
+func _exit_tree() -> void:
+	if fx != null and is_instance_valid(fx):
+		fx.queue_free()
 
 func wait(t: float) -> void:
 	await get_tree().create_timer(t).timeout
