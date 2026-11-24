@@ -189,6 +189,16 @@ func build() -> void:
 	_rim()
 	for u in board.units:
 		spawn(u[0], Vector2i(u[1], u[2]))
+	# the Kithcaller's beast, sent over from the 2D game, takes the square beside you
+	if main.get("kith") is Dictionary and not main.kith.is_empty():
+		var you = me()
+		if you != null:
+			for dd in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(-1, 1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1)]:
+				var q: Vector2i = you.pos + dd
+				var tq = tile(q)
+				if tq != null and tq != "#" and tq != "w" and at(q) == null and abs(level(q) - level(you.pos)) <= 1:
+					spawn("kith", q, main.kith)
+					break
 	# a warm lamp over the table and a cool fill, so the board and its pieces read
 	var key := SpotLight3D.new()
 	key.light_color = Color("ffd8a0")
@@ -589,9 +599,9 @@ func tile_pos(p: Vector2i) -> Vector3:
 	return Vector3((p.x - (W - 1) * 0.5) * TS, top_y(p), (p.y - (H - 1) * 0.5) * TS)
 
 # ---------------------------------------------------------------- the pieces
-func spawn(id: String, p: Vector2i) -> Dictionary:
-	var d: Dictionary = MAPS.unit(id)
-	var u := {"id": id, "name": d.name, "side": d.side, "kind": d.kind, "hp": d.hp, "max": d.hp, "hit": d.hit, "ac": d.ac,
+func spawn(id: String, p: Vector2i, given := {}) -> Dictionary:
+	var d: Dictionary = given if not given.is_empty() else MAPS.unit(id)
+	var u := {"id": id, "name": d.name, "side": d.side, "kind": d.kind, "hp": d.hp, "max": d.get("max", d.hp), "hit": d.hit, "ac": d.ac,
 		"die": d.die, "spd": d.spd, "mv": d.mv, "cards": d.cards.duplicate(), "pos": p,
 		"face": Vector2i(0, 1) if d.side == "foe" else Vector2i(0, -1), "ct": float(rng.randi_range(1, 30)),
 		"res": 0, "used": {}, "stun": 0, "climb": d.get("climb", false) or d.get("fly", false),
@@ -639,7 +649,7 @@ func spawn(id: String, p: Vector2i) -> Dictionary:
 	var art: String = d.art
 	if art == "hero":
 		art = "res://art/pieces/tok_hero_%s.webp" % main.story.S.get("pr", "they")
-	sm.set_shader_parameter("art", load(art))
+	sm.set_shader_parameter("art", d.tex if d.get("tex") != null else load(art))
 	sm.set_shader_parameter("medal", 1.0 if d.get("medal", false) else 0.0)
 	sm.set_shader_parameter("ring_col", Color("6fd08c") if u.side == "you" else Color("e0573f"))
 	sm.set_shader_parameter("rim_col", Color("cfa850") if u.kind != "cap" else Color("f3d27a"))

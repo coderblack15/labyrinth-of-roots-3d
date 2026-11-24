@@ -79,6 +79,7 @@ func _ready() -> void:
 			await _explore(pick)
 			get_tree().reload_current_scene()
 
+var kith := {}   # the Kithcaller's beast for this fight, from the 2D game (see _from_2d)
 var battle_key := ""
 var battle
 
@@ -177,6 +178,8 @@ func _from_2d(q: Dictionary) -> void:
 	var tier: int = max(0, DG.ORDER.find(key))
 	var mx: int = 24 + tier * 2
 	var hp: int = clampi(int(round(float(q.get("hpf", "1")) * mx)), 1, mx)
+	if q.has("kith"):
+		await _kith(q, tier)
 	world.player.visible = false
 	var res: Dictionary = await run_battle(board, hp, "Back to the story", tier)
 	var hpf: float = float(res.hp) / float(mx)
@@ -185,6 +188,33 @@ func _from_2d(q: Dictionary) -> void:
 		JavaScriptBridge.eval("window.parent.postMessage({lor3d: 1, result: '%s', hpf: %f}, '*')" % [res.result, hpf], true)
 	if autoplay and not OS.has_feature("web"):
 		get_tree().quit()
+
+# The Kithcaller's beast fights beside you: kith=ID&kn=Name&khf=HP share&kac=&katk=&kd=NdS.
+# Its painting comes from the 2D game's art folder (../../art/b_ID.webp) when there is one.
+func _kith(q: Dictionary, tier: int) -> void:
+	var dd: PackedStringArray = String(q.get("kd", "1d6")).split("d")
+	var mx: int = 11 + tier  # as Burr grows from dungeon to dungeon
+	kith = {"name": String(q.get("kn", "Your kith")), "side": "you", "kind": "co", "hp": mx, "hit": int(q.get("katk", "4")),
+		"ac": int(q.get("kac", "12")), "die": [int(dd[0]) if dd.size() == 2 else 1, int(dd[1]) if dd.size() == 2 else 6, 0],
+		"spd": 11, "mv": 4, "cards": ["bite", "drag"], "art": "res://art/pieces/tok_burr.webp", "small": true, "tex": null}
+	kith.max = mx
+	kith.hp = clampi(int(round(float(q.get("khf", "1")) * mx)), 1, mx)
+	var img := Image.new()
+	var ok := false
+	if OS.has_feature("web") and q.get("kpic", "") == "1":
+		var hr := HTTPRequest.new()
+		add_child(hr)
+		var url = JavaScriptBridge.eval("new URL('../../art/b_%s.webp', window.location.href).href" % String(q.kith).uri_encode(), true)
+		if url is String and hr.request(url) == OK:
+			var r: Array = await hr.request_completed
+			if r[1] == 200 and img.load_webp_from_buffer(r[3]) == OK:
+				ok = true
+		hr.queue_free()
+	if not ok:
+		# no painting: a plain dark disc with a pale ring, the way an unpainted piece looks
+		img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		img.fill(Color("3a3028"))
+	kith.tex = ImageTexture.create_from_image(img)
 
 # A dungeon is its run of tactics boards (scripts/tactics/campaign.gd).
 # "all" plays every dungeon in chapter order, starting fresh in each.
