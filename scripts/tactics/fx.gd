@@ -3,7 +3,9 @@
 #   a living board   lamps flicker, motes drift, dust falls on big blows
 #   the camera       pushes in on a crit, sweeps round as a boss board opens, slows on the final blow
 #   weighty pieces   a hit rocks a piece, a heavy blow slides it back, a beaten piece topples over
-#   the ground       footfalls puff the ground's own colour, water splashes, ice and crystal glint
+#   the ground       footfalls puff the ground's own colour, water ripples, ice and glass crack under
+#                    a heavy blow, moss and roots smoulder on a crit (on screen only, Adrian's pick:
+#                    the rules stay the 2D game's)
 #   sound            footsteps by ground, blows, a crit's ring, all in a cave's echo; the fight's
 #                    music swells as the foes fall
 #   weather          fog in the fens and drowned places, heat haze in the sands, snow in the rime
@@ -11,6 +13,10 @@
 extends Node3D
 
 const M = preload("res://scripts/models.gd")
+
+# how the ground answers a heavy blow, by theme (looks only)
+const CRACKS := ["rime", "melt", "glass", "moon", "ink"]
+const SMOULDER := ["roots", "hesk", "jungle", "heart", "fen", "east"]
 
 # which weather each chapter's theme gets
 const WEATHER := {
@@ -47,6 +53,12 @@ func setup(battle) -> void:
 	if b.world.music:
 		music_was = b.world.music.volume_db
 	b.world.play_music("rootbreaker")
+	if "--dbg-fx" in OS.get_cmdline_user_args():
+		# for stills: show the ground's answers at every piece
+		for u in b.units:
+			crack(u.pos)
+			smoulder(u.pos)
+			ripple(b.tile_pos(u.pos) + Vector3(0, 0.05, 0))
 	if b.world.music:
 		b.world.music.volume_db = -16.0
 
@@ -216,6 +228,8 @@ func step(u: Dictionary, p: Vector2i) -> void:
 	var at: Vector3 = b.tile_pos(p) + Vector3(0, 0.05, 0)
 	var wet: bool = b.tile(p) == "w" or b.tile(p) == "~"
 	burst(at, _ground_col(p), 10 if wet else 6, 1.2 if wet else 0.7, 0.07, 1.0, 0.5)
+	if wet:
+		ripple(at)
 	_play("splash" if wet else ("crunch" if WEATHER.get(b.board.get("theme", ""), "") == "snow" else "step"), -14.0, randf_range(0.9, 1.1))
 
 func struck(t: Dictionary, from: Vector2i, dmg: int, crit: bool) -> void:
@@ -241,6 +255,13 @@ func struck(t: Dictionary, from: Vector2i, dmg: int, crit: bool) -> void:
 		burst(t.node.position + Vector3(0, 2.6, 0), Color(0.85, 0.8, 0.7, 0.7), 24, 0.6, 0.05, -1.0, 1.4)
 		burst(t.node.position + Vector3(0, 0.1, 0), _ground_col(t.pos), 14, 1.6, 0.08, 1.0, 0.6)
 		shake = 1.0 if crit else 0.6
+		var theme: String = b.board.get("theme", "")
+		if theme in CRACKS:
+			crack(t.pos)
+		elif theme in SMOULDER and crit:
+			smoulder(t.pos)
+		if b.tile(t.pos) == "w" or b.tile(t.pos) == "~":
+			ripple(b.tile_pos(t.pos) + Vector3(0, 0.05, 0), 1.6)
 	if crit:
 		_play("ring", -8.0, 1.0)
 		push_in(t.node.position, 0.9)
@@ -257,6 +278,79 @@ func toppled(u: Dictionary, from: Vector2i) -> void:
 	_play("topple", -7.0, randf_range(0.9, 1.05))
 	burst(u.node.position + away * 0.6, _ground_col(u.pos), 16, 1.3, 0.08, 1.0, 0.7)
 	_swell()
+
+# ---------------------------------------------------------------- the ground answers (looks only)
+func _fade_out(n: Node3D, m: StandardMaterial3D, after: float, secs: float) -> void:
+	var tw := create_tween()
+	tw.tween_interval(after)
+	tw.tween_property(m, "albedo_color:a", 0.0, secs)
+	tw.tween_callback(n.queue_free)
+
+# rings that spread over water from a footfall or a blow
+func ripple(at: Vector3, big := 1.0) -> void:
+	for i in 2:
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color = Color(0.8, 0.9, 1.0, 0.55)
+		var r := MeshInstance3D.new()
+		r.mesh = M.torus_mesh(0.18, 0.012)
+		r.material_override = m
+		r.position = at
+		add_child(r)
+		var tw := create_tween()
+		tw.tween_interval(i * 0.18)
+		tw.tween_property(r, "scale", Vector3.ONE * 3.2 * big, 0.9).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(m, "albedo_color:a", 0.0, 0.9)
+		tw.tween_callback(r.queue_free)
+
+# a star of cracks in ice or glass under a heavy blow; it fades after a while
+func crack(p: Vector2i) -> void:
+	var at: Vector3 = b.tile_pos(p) + Vector3(0, 0.015, 0)
+	var n := Node3D.new()
+	n.position = at
+	add_child(n)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(0.9, 0.97, 1.0, 0.85)
+	for i in 7:
+		var a := TAU * i / 7.0 + randf_range(-0.25, 0.25)
+		var len := randf_range(0.35, 0.55)
+		var seg := MeshInstance3D.new()
+		seg.mesh = M.box(0.045, 0.006, len)
+		seg.material_override = m
+		seg.rotation = Vector3(0, a, 0)
+		seg.position = Vector3(sin(a), 0, cos(a)) * (0.3 + len * 0.5)
+		n.add_child(seg)
+		# a fork off each spoke
+		var f := MeshInstance3D.new()
+		f.mesh = M.box(0.03, 0.006, len * 0.45)
+		f.material_override = m
+		var a2 := a + randf_range(-0.6, 0.6)
+		f.rotation = Vector3(0, a2, 0)
+		f.position = Vector3(sin(a), 0, cos(a)) * (0.3 + len * 0.8) + Vector3(sin(a2), 0, cos(a2)) * len * 0.22
+		n.add_child(f)
+	n.scale = Vector3.ONE * 0.2
+	var tw := create_tween()
+	tw.tween_property(n, "scale", Vector3.ONE, 0.12).set_ease(Tween.EASE_OUT)
+	_play("crunch", -9.0, 0.7)
+	_fade_out(n, m, 5.0, 2.0)
+
+# moss and roots smoulder where a crit lands: embers, a little smoke and a dying glow
+func smoulder(p: Vector2i) -> void:
+	var at: Vector3 = b.tile_pos(p) + Vector3(0, 0.05, 0)
+	burst(at, Color(1.0, 0.55, 0.2, 0.95), 18, 1.1, 0.05, 1.0, 1.2)
+	burst(at + Vector3(0, 0.3, 0), Color(0.35, 0.32, 0.3, 0.45), 10, 0.4, 0.3, 1.0, 2.2)
+	var l := OmniLight3D.new()
+	l.light_color = Color("ff7a30")
+	l.light_energy = 1.6
+	l.omni_range = 2.2
+	l.position = at + Vector3(0, 0.25, 0)
+	add_child(l)
+	var tw := create_tween()
+	tw.tween_property(l, "light_energy", 0.0, 2.5)
+	tw.tween_callback(l.queue_free)
 
 # ---------------------------------------------------------------- the camera
 func push_in(at: Vector3, hold: float) -> void:
