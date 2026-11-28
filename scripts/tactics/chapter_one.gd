@@ -31,7 +31,7 @@ const BEFORE := {
 
 # How to play, once, before the first fight.
 const GUIDE := ["How a fight goes", "Your first fight",
-	"Gold squares show where you can move: tap one to walk there. Tap a foe once to see it, and again to strike. Your cards along the bottom are your moves; Brace makes the next blow at you weaker. Burr fights beside you on his own. Ground matters: high ground helps you hit, webs slow you, sinking ground traps whoever stands in it. Tap End turn when you're done.",
+	"Gold squares show where you can move: tap one to walk there. Tap a foe once to see it, and again to strike. Your cards along the bottom are your moves: Strike, a Heavy Blow, a Shove that pushes a foe into sinking ground or off a ledge, and a Sling from range. Burr fights beside you on his own. Ground matters: high ground helps you hit, webs slow you, sinking ground traps whoever stands in it. Tap End turn when you're done.",
 	"Got it"]
 
 # Between the last road fight and the boss: the Hollow Chamber.
