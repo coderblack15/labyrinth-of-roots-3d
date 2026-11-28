@@ -218,13 +218,18 @@ func _kith(q: Dictionary, tier: int) -> void:
 
 # A dungeon is its run of tactics boards (scripts/tactics/campaign.gd).
 # "all" plays every dungeon in chapter order, starting fresh in each.
+# "chapter1" plays Chapter I with its story between the fights.
 func _explore(key: String) -> void:
+	var ch := key == "chapter1"
+	if ch:
+		key = "roots"
 	var keys: Array = preload("res://scripts/explore/dungeons.gd").ORDER if key == "all" else [key]
 	for k in keys:
 		var c = preload("res://scripts/tactics/campaign.gd").new()
 		c.name = "Campaign"
 		c.main = self
 		c.auto = autoplay
+		c.chapter = ch
 		add_child(c)
 		var r: String = await c.run(k)
 		print("== DUNGEON ", k, " ", r)

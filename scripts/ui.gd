@@ -502,7 +502,7 @@ func _lbl(parent: Control, text: String, size: int, col := C_TEXT) -> Label:
 	parent.add_child(l)
 	return l
 
-# The first screen: pick a dungeon (any of the twenty, or all in order) or the story slice.
+# The first screen: Chapter I with its story, any of the twenty dungeons, or all in order.
 func start_menu() -> String:
 	await fade_in(0.8)
 	var t := _overlay()
@@ -510,12 +510,16 @@ func start_menu() -> String:
 	_lbl(t.box, "Tactics in the Dungeons, in 3D", 17, C_MECH)
 	_lbl(t.box, "Created by: Adrian Blackshire and Claude", 14, Color("b0a080"))
 	var pick := [""]
+	var ch := _button("Chapter I: The Labyrinth of Roots   ·   start here")
+	ch.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ch.pressed.connect(func(): pick[0] = "chapter1")
+	t.box.add_child(ch)
 	var all := _button("Play all twenty, in order")
 	all.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	all.pressed.connect(func(): pick[0] = "all")
 	t.box.add_child(all)
 	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(0, min(360.0, view.y - 330))
+	sc.custom_minimum_size = Vector2(0, min(360.0, view.y - 390))
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	t.box.add_child(sc)
 	var list := VBoxContainer.new()
